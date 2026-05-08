@@ -1,8 +1,11 @@
 import { NestFactory } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import { AnaliticaModule } from './analitica.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AnaliticaModule);
-  await app.listen(process.env.port ?? 3003);
+  const configService = app.get(ConfigService);
+  const port = configService.get<number>('PORT_ANALITICA') || 3003;
+  await app.listen(port);
 }
 bootstrap();

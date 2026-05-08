@@ -1,14 +1,25 @@
 services:
+  db:
+    image: postgres:15-alpine
+    env_file:
+      - ./Backend/.env
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - db_data:/var/lib/postgresql/data
   pagos:
     build:
       context: ./Backend
       dockerfile: Dockerfile
       args:
         APP_NAME: pagos
+    env_file:
+      - ./Backend/.env
     ports:
       - "3001:3001"
-    environment:
-      - PORT=3001
+    depends_on:
+      - db
 
   conciliacion:
     build:
@@ -16,10 +27,12 @@ services:
       dockerfile: Dockerfile
       args:
         APP_NAME: conciliacion
+    env_file:
+      - ./Backend/.env
     ports:
       - "3002:3002"
-    environment:
-      - PORT=3002
+    depends_on:
+      - db
 
   analitica:
     build:
@@ -27,18 +40,22 @@ services:
       dockerfile: Dockerfile
       args:
         APP_NAME: analitica
+    env_file:
+      - ./Backend/.env
     ports:
       - "3003:3003"
-    environment:
-      - PORT=3003
-
-  frontend:
-    build:
-      context: ./Frontend/front-gestionti
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
     depends_on:
-      - pagos
-      - conciliacion
-      - analitica
+      - db
+
+volumes:
+  db_data:
+#  frontend:
+#    build:
+#      context: ./Frontend/front-gestionti
+#      dockerfile: Dockerfile
+#    ports:
+#      - "3000:3000"
+#    depends_on:
+#      - pagos
+#      - conciliacion
+#      - analitica
