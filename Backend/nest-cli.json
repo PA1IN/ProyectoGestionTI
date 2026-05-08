@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "apps/analitica/src",
+  "compilerOptions": {
+    "deleteOutDir": true,
+    "webpack": true
+  },
+  "monorepo": true,
+  "root": "apps/analitica",
+  "projects": {
+    "analitica": {
+      "type": "application",
+      "root": "apps/analitica",
+      "entryFile": "main",
+      "sourceRoot": "apps/analitica/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/analitica/tsconfig.app.json"
+      }
+    },
+    "conciliacion": {
+      "type": "application",
+      "root": "apps/conciliacion",
+      "entryFile": "main",
+      "sourceRoot": "apps/conciliacion/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/conciliacion/tsconfig.app.json"
+      }
+    },
+    "pagos": {
+      "type": "application",
+      "root": "apps/pagos",
+      "entryFile": "main",
+      "sourceRoot": "apps/pagos/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/pagos/tsconfig.app.json"
+      }
+    }
+  }
+}
