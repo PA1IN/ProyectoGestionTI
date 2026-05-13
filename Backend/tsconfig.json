@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "resolvePackageJsonExports": true,
@@ -27,6 +26,10 @@
       "jest"
     ],
     "baseUrl": "./",
-    "paths": {}
+    "paths": {
+      "@libs/config": [
+        "libs/config/src"
+      ]
+    }
   }
 }
