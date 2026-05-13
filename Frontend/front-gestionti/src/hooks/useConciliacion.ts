@@ -7,7 +7,7 @@ export interface RegistroHistorial {
     nombreArchivo:string;
     totalTransacciones: number;
     diferencias:number;
-    operador: string;
+    operador?: string;
 }
 
 export function useHistorialConciliaciones(){
@@ -23,9 +23,9 @@ export function useHistorialConciliaciones(){
             return new Promise((resolve) => {
                 setTimeout(() => {
                     resolve([
-                        {id: '101', fecha: '2026-05-11', nombreArchivo: 'banco_estado_1105.csv', totalTransacciones: 450, diferencias: 2, operador: 'EF'},
-                        { id: '102', fecha: '2026-05-10', nombreArchivo: 'banco_estado_1005.csv', totalTransacciones: 380, diferencias: 0, operador: 'EF (Automático)' },
-                        { id: '103', fecha: '2026-05-09', nombreArchivo: 'banco_estado_0905.csv', totalTransacciones: 412, diferencias: 5, operador: 'David Ramos' },
+                        {id: '101', fecha: '2026-05-11', nombreArchivo: 'banco_estado_1105.csv', totalTransacciones: 450, diferencias: 2, operador: 'henrique gomez'},
+                        { id: '102', fecha: '2026-05-10', nombreArchivo: 'banco_estado_1005.csv', totalTransacciones: 380, diferencias: 0, operador: 'daniel soto' },
+                        { id: '103', fecha: '2026-05-09', nombreArchivo: 'banco_estado_0905.csv', totalTransacciones: 412, diferencias: 5, operador: 'juanito perez' },
                     ])
                 }, 1000);
 

@@ -12,10 +12,10 @@ export interface Alerta {
 
 
 let mockAlertas: Alerta[] = [
-    { id: 'ALR-001', fecha: '2026-05-13 08:30', tipo: 'Diferencia de Conciliación', descripcion: 'Transacción TRX-9903 no encontrada en los registros del banco.', nivel: 'Alto', estado: 'Pendiente' },
-    { id: 'ALR-002', fecha: '2026-05-12 15:45', tipo: 'Reintento Sospechoso', descripcion: 'Múltiples intentos fallidos (5+) para la tarjeta terminada en 4312.', nivel: 'Medio', estado: 'Pendiente' },
-    { id: 'ALR-003', fecha: '2026-05-12 10:15', tipo: 'Falla de Proveedor', descripcion: 'Caída de conexión temporal con Sistema Bancario Simulado (Timeout).', nivel: 'Alto', estado: 'Resuelto' },
-    { id: 'ALR-004', fecha: '2026-05-11 11:20', tipo: 'Inconsistencia de Monto', descripcion: 'Monto cobrado ($15.000) difiere de la orden original ($16.050) en TRX-8842.', nivel: 'Alto', estado: 'Pendiente' },
+    { id: 'alerta-001', fecha: '2026-05-13 08:30', tipo: 'Diferencia de Conciliación', descripcion: 'Transacción trans-9903 no encontrada en los registros del banco.', nivel: 'Alto', estado: 'Pendiente' },
+    { id: 'alerta-002', fecha: '2026-05-12 15:45', tipo: 'Reintento Sospechoso', descripcion: 'Múltiples intentos fallidos (5+) para la tarjeta terminada en 4312.', nivel: 'Medio', estado: 'Pendiente' },
+    { id: 'alerta-003', fecha: '2026-05-12 10:15', tipo: 'Falla de Proveedor', descripcion: 'Caída de conexión temporal con Sistema Bancario Simulado (Timeout).', nivel: 'Alto', estado: 'Resuelto' },
+    { id: 'alerta-004', fecha: '2026-05-11 11:20', tipo: 'Inconsistencia de Monto', descripcion: 'Monto cobrado ($15.000) que difiere de la orden original ($16.050) en TRX-8842.', nivel: 'Alto', estado: 'Pendiente' },
 ]
 
 //traer las alertas del backend

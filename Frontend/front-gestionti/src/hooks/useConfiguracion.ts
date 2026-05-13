@@ -49,7 +49,7 @@ export function useGuardarConfiguracion() {
     return useMutation({
         mutationFn: async (nuevaConfig: ConfiguracionReintentos) => {
             /*
-            const respuesta = await api.put('/configuracion/reintentos', nuevaConfig);
+            const respuesta = await api.patch('/configuracion/reintentos', nuevaConfig);
             return respuesta.data;
             */
 
