@@ -7,6 +7,12 @@
 $ npm install
 ```
 
+## Levantar la base de datos con docker primero en la raiz del proyecto
+
+```bash
+$ docker-compose up -d --build db
+```
+
 ## Para compilar el proyecto por microservicio (sin docker)
 
 ```bash
