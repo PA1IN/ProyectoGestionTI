@@ -47,8 +47,6 @@ services:
     depends_on:
       - db
 
-volumes:
-  db_data:
 #  frontend:
 #    build:
 #      context: ./Frontend/front-gestionti
@@ -59,3 +57,6 @@ volumes:
 #      - pagos
 #      - conciliacion
 #      - analitica
+
+volumes:
+  db_data:
