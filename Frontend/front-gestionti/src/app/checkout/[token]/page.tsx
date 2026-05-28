@@ -7,6 +7,7 @@ import { QrCode, ShieldCheck, XCircle } from 'lucide-react';
 import { FormTarjeta } from '@/components/Checkout/FormTarjeta';
 import { MetodosPago } from '@/components/Checkout/MetodosPago';
 import { ResumenOrden } from '@/components/Checkout/ResumenOrden';
+import { BilleteraDigital } from '@/components/Checkout/BilleteraDigital';
 
 
 export default function CheckoutPage({ params }: { params: Promise<{ token: string }> }) {
@@ -23,10 +24,16 @@ export default function CheckoutPage({ params }: { params: Promise<{ token: stri
     const handlePago = async (datosTarjeta: DatosPagoTarjeta) => {
         try {
             await procesarPago.mutateAsync(datosTarjeta);
-                router.push(`/resultado/exito?comercio=${transaccion?.comercio}`);
+
+            const returnUrl = transaccion?.urlRetorno || '/';
+            const encodedReturnUrl = encodeURIComponent(returnUrl);
+
+            router.push(`/resultado/exito?comercio=${transaccion?.comercio}&returnUrl=${encodedReturnUrl}`);
         } catch (error) {
             console.error("Error al procesar el pago, pago rechazado", error);
-            router.push(`/resultado/fallo?token=${token}&comercio=${transaccion?.comercio}`);
+            const returnUrl = transaccion?.urlRetorno || '/';
+            const encodedReturnUrl = encodeURIComponent(returnUrl);
+            router.push(`/resultado/fallo?token=${token}&comercio=${transaccion?.comercio}&returnUrl=${encodedReturnUrl}`);
         }
     };
 
@@ -83,8 +90,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ token: stri
                             </div>
                         ) : (
                             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">
-                                <QrCode className="w-48 h-48 mx-auto text-gray-800 mb-4"/>
-                                <p className="text-sm text-gray-500">Escanea el codigo QR con tu app de pago</p>
+                               <BilleteraDigital qrData={transaccion?.codigoQr} isLoading={cargaTransaccion}/>
                             </div>
                         )}
                     </div>
