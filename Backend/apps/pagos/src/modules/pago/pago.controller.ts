@@ -1,21 +1,21 @@
 import { Body, Controller, Get, Headers, Param, Post } from '@nestjs/common';
 import { PagoService } from './pago.service';
-import { CreatePagoDto } from './dto/create-pago.dto';
-import { ProcesarPagoDto } from './dto/procesar-pago.dto';
+import { CreateTransaccionDto } from './dto/create-transaccion.dto';
+import { ProcesarTransaccionDto } from './dto/procesar-transaccion.dto';
 
 @Controller('pago')
 export class PagoController {
   constructor(private readonly pagoService: PagoService) {}
 
   @Post('transaccion')
-  createTransaction(@Body() createPagoDto: CreatePagoDto) {
-    return this.pagoService.createTransaction(createPagoDto);
+  createTransaction(@Body() createTransaccionDto: CreateTransaccionDto) {
+    return this.pagoService.createTransaction(createTransaccionDto);
   }
 
   @Post('process')
   processTransaction(
     @Headers('authorization') authorization: string,
-    @Body() processTransactionDto: ProcesarPagoDto,
+    @Body() processTransactionDto: ProcesarTransaccionDto,
   ) {
     const token = authorization?.startsWith('Bearer ')
       ? authorization.slice('Bearer '.length)
@@ -26,11 +26,31 @@ export class PagoController {
 
   @Get()
   findAll() {
-    return this.pagoService.findAll();
+    return this.pagoService.getAllTransacciones();
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.pagoService.findOne(+id);
+  @Get('transacciones')
+  getAllTransacciones() {
+    return this.pagoService.getAllTransacciones();
+  }
+
+  @Get('detalles')
+  getAllDetalles() {
+    return this.pagoService.getAllDetalles();
+  }
+
+  @Get('historiales')
+  getAllHistoriales() {
+    return this.pagoService.getAllHistoriales();
+  }
+
+  @Get('detalle/:id')
+  getDetalleTransaccion(@Param('id') id: string) {
+    return this.pagoService.getDetalleTransaccion(+id);
+  }
+
+  @Get('historial/:id')
+  getHistorialTransaccion(@Param('id') id: string) {
+    return this.pagoService.getHistorialTransaccion(id);
   }
 }
