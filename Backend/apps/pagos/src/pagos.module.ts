@@ -7,7 +7,9 @@ import { PagosService } from './pagos.service';
 import { AuthModule } from './auth/auth.module';
 import { PagoModule } from './modules/pago/pago.module';
 import { Tarjeta } from './modules/tarjeta/entities/tarjeta.entity';
-import { Pago } from './modules/pago/entities/pago.entity';
+import { Transaccion } from './modules/pago/entities/transaccion.entity';
+import { DetalleTransaccion } from './modules/pago/entities/detalle-transaccion.entity';
+import { HistorialTransaccion } from './modules/pago/entities/historial-transaccion.entity';
 
 @Module({
   imports: [
@@ -17,7 +19,7 @@ import { Pago } from './modules/pago/entities/pago.entity';
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         url: configService.get<string>('database.url'),
-        entities: [Tarjeta, Pago],
+        entities: [Tarjeta, Transaccion, DetalleTransaccion, HistorialTransaccion],
         synchronize: configService.get<boolean>('database.synchronize') ?? true,
       }),
     }),
