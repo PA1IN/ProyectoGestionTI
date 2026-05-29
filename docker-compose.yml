@@ -75,6 +75,3 @@ volumes:
 #      - pagos
 #      - conciliacion
 #      - analitica
-
-volumes:
-  db_data:
