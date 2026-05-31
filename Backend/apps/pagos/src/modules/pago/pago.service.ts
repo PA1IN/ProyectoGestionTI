@@ -12,6 +12,7 @@ import { EstadoRespuestaTransaccion } from './enums/estado-respuesta-transaccion
 import { EstadoTransaccionDb, Transaccion } from './entities/transaccion.entity';
 import { HistorialTransaccion } from './entities/historial-transaccion.entity';
 import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.entity';
+import { RabbitMqPublisherService } from './rabbitmq/rabbitmq-publisher.service';
 
 type TransactionPayload = {
   transactionId: string;
@@ -64,6 +65,7 @@ export class PagoService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly rabbitMqPublisherService: RabbitMqPublisherService,
     @InjectRepository(Tarjeta)
     private readonly tarjetaService: Repository<Tarjeta>,
     @InjectRepository(Transaccion)
@@ -113,8 +115,10 @@ export class PagoService {
   }
 
   async processTransaction(token: string, procesarTransaccionDto: ProcesarTransaccionDto): Promise<ProcessTransactionResult> {
+    let payload: TransactionPayload | undefined;
+
     try {
-      const payload = await this.jwtService.verifyAsync<TransactionPayload>(token, {
+      payload = await this.jwtService.verifyAsync<TransactionPayload>(token, {
         secret: this.configService.get<string>('JWT_SECRET'),
       });
 
@@ -182,16 +186,50 @@ export class PagoService {
           nombreComercio: payload.nombreComercio,
         },
       };
-    }
-      catch (error) {
-        return {
-          status: EstadoRespuestaTransaccion.RECHAZADO,
-          message: 'Token inválido o expirado',
-          transactionId: 'unknown',
-          redirectUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'}?status=RECHAZADO&transactionId=unknown`,
-        };
+    } catch (error) {
+      const isJwtError = this.isExpectedJwtError(error);
+
+      if (this.shouldPublishTechnicalAlert(error)) {
+        await this.rabbitMqPublisherService.publishTransactionFailure({
+          transactionId: payload?.transactionId ?? 'unknown',
+          monto: payload?.monto,
+          moneda: payload?.moneda,
+          nombreComercio: payload?.nombreComercio,
+          reason: error instanceof Error ? error.message : 'Error inesperado',
+          errorName: error instanceof Error ? error.name : 'UnknownError',
+          stage: payload ? 'process-transaction' : 'token-validation',
+          occurredAt: new Date().toISOString(),
+        });
       }
+
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+      const transactionId = payload?.transactionId ?? 'unknown';
+      const redirectUrl = payload?.returnUrl
+        ? `${payload.returnUrl}?status=RECHAZADO&transactionId=${transactionId}`
+        : `${frontendUrl}?status=RECHAZADO&transactionId=${transactionId}`;
+
+      return {
+        status: EstadoRespuestaTransaccion.RECHAZADO,
+        message: isJwtError ? 'Token inválido o expirado' : 'Error interno al procesar la transacción',
+        transactionId,
+        redirectUrl,
+      };
+    }
   }
+
+    private isExpectedJwtError(error: unknown): boolean {
+      if (!(error instanceof Error)) {
+        return false;
+      }
+
+      const expectedJwtErrors = ['TokenExpiredError', 'JsonWebTokenError', 'NotBeforeError'];
+      return expectedJwtErrors.includes(error.name);
+    }
+
+  private shouldPublishTechnicalAlert(error: unknown): boolean {
+    return !this.isExpectedJwtError(error);
+  }
+
   async getDetalleTransaccion(id: number) {
     const detalle = await this.detalleRepository.findOne({
       where: { id },

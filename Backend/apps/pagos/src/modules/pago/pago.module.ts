@@ -8,10 +8,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Transaccion } from './entities/transaccion.entity';
 import { DetalleTransaccion } from './entities/detalle-transaccion.entity';
 import { HistorialTransaccion } from './entities/historial-transaccion.entity';
+import { RabbitMqPublisherService } from './rabbitmq/rabbitmq-publisher.service';
 
 @Module({
   imports: [TarjetaModule, AuthModule, TypeOrmModule.forFeature([Tarjeta, Transaccion, DetalleTransaccion, HistorialTransaccion])],
   controllers: [PagoController],
-  providers: [PagoService],
+  providers: [PagoService, RabbitMqPublisherService],
 })
 export class PagoModule {}
