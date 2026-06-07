@@ -121,7 +121,7 @@ export function useGenerarQr(tokenTransaccion: string) {
             const respuesta = await api.get(`/pagos/estado/${tokenTransaccion}`);
             return respuesta.data;
         }
-        enabled: activarPolling,
+        enabled: activarPolling,    
         refetchInterval: 3000,
     })
 }*/

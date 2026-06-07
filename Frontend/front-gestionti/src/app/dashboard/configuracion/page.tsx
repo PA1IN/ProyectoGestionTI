@@ -3,7 +3,7 @@
 import React  from 'react';
 import { Settings,Loader2 } from 'lucide-react';
 import { useObtenerConfiguracion } from '@/hooks/useConfiguracion';
-import { FormConfiguracion } from '@/components/Configuracion/page';
+import { FormConfiguracion } from '@/components/Configuracion/FormConfiguracion';
 
 export default function ConfiguracionPage() { 
     const { data: configInicial, isLoading} = useObtenerConfiguracion();
