@@ -9,6 +9,7 @@ interface DropProps {
 }
 
 export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
+    //estados 
     const [arrastrando, setArrastrando] = useState(false);
     const [archivo, setArchivo] = useState<File | null>(null);
     const [estado, setEstado] = useState<'esperando' | 'subiendo' | 'exito' | 'error'>('esperando');
@@ -17,13 +18,13 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
 
     const subirArchivo = useSubirArchivoConciliacion();
 
-    // drag & drop
-    const handleDragOver = (e: React.DragEvent) => {
+    //funciones de drag y drop
+    const dragInicio = (e: React.DragEvent) => {
         e.preventDefault();
         setArrastrando(true);
     };
 
-    const handleDragLeave = () => setArrastrando(false);
+    const dragTermino = () => setArrastrando(false);
 
 
     const validarArchivo = (arch: File) => {
@@ -42,21 +43,21 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
         setMensajeError('');
     }
 
-    const handleDrop = (e: React.DragEvent) => {
+    const dropInicio = (e: React.DragEvent) => {
         e.preventDefault();
         setArrastrando(false);
         const archivo = e.dataTransfer.files[0];
         validarArchivo(archivo);
     }
 
-    const handleSeleccionManual = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const seleccionManual = (e: React.ChangeEvent<HTMLInputElement>) => {
         if(e.target.files && e.target.files.length > 0) {
             validarArchivo(e.target.files[0]);
         }
     };
 
 
-    const handleSubirArchivo = async () => {
+    const subirArch = async () => {
         if(!archivo) return;
         setEstado('subiendo');
 
@@ -65,9 +66,9 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
             setEstado('exito');
             onArchivoProcesado(resultados);
         } catch(err) {
-            console.error("Error al procesar el archivo:", err);
+            console.error("error al procesar el archivo:", err);
             setEstado('error');
-            setMensajeError('hubo un problema de red al comunicarse con el server')
+            setMensajeError('hubo un problema de red al comunicarse con el servidor')
         }
     };
 
@@ -81,9 +82,9 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
         <div className="w-full">
             {estado !== 'exito' && (
                 <div
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
+                    onDragOver={dragInicio}
+                    onDragLeave={dragTermino}
+                    onDrop={dropInicio}
                     onClick={() => !archivo && inputRef.current?.click()}
                     className={`relative border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center transition-all ${
                         archivo ? 'border-indigo-400 bg-indigo-50/50 cursor-default' :
@@ -95,7 +96,7 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
                         type="file"
                         className="hidden"
                         ref={inputRef}
-                        onChange={handleSeleccionManual}
+                        onChange={seleccionManual}
                         accept=".csv, application/vnd.openxmlformats-officedocument.sheet, application/vnd.ms-excel"
                     />
                     {!archivo ? (
@@ -121,7 +122,7 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
                                 )}
                             </div>
                             <button
-                                onClick={(e) => {e.stopPropagation(); handleSubirArchivo(); }}
+                                onClick={(e) => {e.stopPropagation(); subirArch(); }}
                                 disabled={estado === 'subiendo'}
                                 className="mt-6 flex items-center gap-2 bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold shadow-md hover:bg-indigo-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                             >

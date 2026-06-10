@@ -1,17 +1,15 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import {useRouter, usePathname } from 'next/navigation';
-import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { LayoutDashboard, FileSpreadsheet, BellRing, BarChart3, LogOut, ShieldAlert, Settings } from 'lucide-react';
 import { Menulateral } from '@/components/Dashboard/Menulateral';
 import { TopBar } from '@/components/Dashboard/TopBar';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { token, loading, logout } = useAuth();
-    const router = useRouter();
-    const pathname = usePathname();
+    //const router = useRouter();
+    //const pathname = usePathname();
 
     /*useEffect(() => {
         if(!loading && !token)

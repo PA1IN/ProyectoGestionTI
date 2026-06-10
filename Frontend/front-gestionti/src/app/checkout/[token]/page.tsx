@@ -3,7 +3,7 @@
 import React, { useState, use } from 'react';
 import { useDetalleTransaccion, useProcesarPago, DatosPagoTarjeta } from '@/hooks/useCheckout';
 import { useRouter } from 'next/navigation';
-import { QrCode, ShieldCheck, XCircle } from 'lucide-react';
+import { ShieldCheck, XCircle } from 'lucide-react';
 import { FormTarjeta } from '@/components/Checkout/FormTarjeta';
 import { MetodosPago } from '@/components/Checkout/MetodosPago';
 import { ResumenOrden } from '@/components/Checkout/ResumenOrden';
@@ -15,13 +15,12 @@ export default function CheckoutPage({ params }: { params: Promise<{ token: stri
     const desarmarparametros = use(params);
     const token = desarmarparametros.token;
 
-    // estado para saber el metodo de pago seleccionado
     const [metodoPago, setMetododoPago] = useState<'tarjeta' | 'billetera'>('tarjeta');
 
     const {data: transaccion, isLoading: cargaTransaccion, isError: errorTransaccion} = useDetalleTransaccion(token);
     const procesarPago = useProcesarPago(token);
 
-    const handlePago = async (datosTarjeta: DatosPagoTarjeta) => {
+    const ProcesarPago = async (datosTarjeta: DatosPagoTarjeta) => {
         try {
             await procesarPago.mutateAsync(datosTarjeta);
 
@@ -30,14 +29,13 @@ export default function CheckoutPage({ params }: { params: Promise<{ token: stri
 
             router.push(`/resultado/exito?comercio=${transaccion?.comercio}&returnUrl=${encodedReturnUrl}`);
         } catch (error) {
-            console.error("Error al procesar el pago, pago rechazado", error);
+            console.error("error al procesar el pago, pago rechazado", error);
             const returnUrl = transaccion?.urlRetorno || '/';
             const encodedReturnUrl = encodeURIComponent(returnUrl);
             router.push(`/resultado/fallo?token=${token}&comercio=${transaccion?.comercio}&returnUrl=${encodedReturnUrl}`);
         }
     };
 
-    //vista 1: mientras se cargan los datos de la transaccion
     if (cargaTransaccion) {
         return (
             <div className='flex flex-col items-center justify-center h-screen gap-4'>
@@ -47,7 +45,6 @@ export default function CheckoutPage({ params }: { params: Promise<{ token: stri
         );
     }
 
-    //vista 2: si hay un error al cargar los datos de la transaccion o el token no es valido
     if (errorTransaccion || !transaccion) {
         return (
             <div className='flex flex-col items-center justify-center h-screen gap-4'>
@@ -58,12 +55,11 @@ export default function CheckoutPage({ params }: { params: Promise<{ token: stri
         );
     }
 
-    //vista 3: formulario de pago
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center py-10 px-4">
             <div className="max-w-4xl w-full bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col md:flex-row">
 
-                {/*columna izquierda / metodos e ingreso de datos*/}
+                {/* metodos e ingreso de datos*/}
                 <div className="flex-1 p-8">
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">Estas pagando en</p>
                     <h1 className="text-2xl font-bold text-indigo-600 mb-8">{transaccion.comercio}</h1>
@@ -79,14 +75,14 @@ export default function CheckoutPage({ params }: { params: Promise<{ token: stri
                     </button>
                 </div>
 
-                {/*columna derecha / resumen del pedido y formulario*/}
+                {/* resumen del pedido y formulario*/}
                 <div className="flex-1 bg-gray-50 p-8 border-l border-gray-100 flex flex-col">
                     <ResumenOrden montoTotal={transaccion.montoTotal} />
 
                     <div className="flex-1">
                         {metodoPago === 'tarjeta' ? (
                             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                                <FormTarjeta onSubmit={handlePago} isProcessing={procesarPago.isPending} />
+                                <FormTarjeta onSubmit={ProcesarPago} isProcessing={procesarPago.isPending} />
                             </div>
                         ) : (
                             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">

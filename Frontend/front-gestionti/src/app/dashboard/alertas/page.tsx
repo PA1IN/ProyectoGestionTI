@@ -1,6 +1,6 @@
 "use client"; 
 import React, { useState } from 'react';
-import { BellRing, AlertTriangle, ShieldAlert, CheckCircle2, Search, Filter, Clock, Loader2 } from 'lucide-react';
+import { BellRing, AlertTriangle, ShieldAlert, CheckCircle2, Clock, Loader2 } from 'lucide-react';
 import { useObtenerAlertas, useResolverAlerta } from '@/hooks/useAuditoria';
 
 export default function AlertasPage() {
@@ -50,7 +50,7 @@ export default function AlertasPage() {
                 </div>
 
                 <div className="flex bg-white rounded-xl border border-gray-200 p-1 shadow-sm w-fit">
-                    {(['Todos', 'Pendiente', 'Resuelto'] as cont).map(estado => (
+                    {(['Todos', 'Pendiente', 'Resuelto'] as const).map(estado => (
                         <button
                             key={estado}
                             onClick={() => setFiltroEstado(estado)}

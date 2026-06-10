@@ -7,8 +7,8 @@ import { ShieldAlert, Lock, Mail, Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
-    const [ email, setEmail ] = useState('');
-    const [ password, setPassword ] = useState('');
+    const [ correo, setCorreo ] = useState('');
+    const [ passAcceso, setPassAcceso ] = useState('');
     const [ error, setError] = useState('');
     const [ botonVisible, setBotonVisible] = useState(false);
 
@@ -21,13 +21,13 @@ export default function LoginPage() {
         }
     }, [token, router]);
 
-    const handleSubmit = async (e: SyntheticEvent ) => {
+    const enviar = async (e: SyntheticEvent ) => {
         e.preventDefault();
         setError('');
         setBotonVisible(true);
 
         try {
-            const respuesta = await api.post('/auth/login', { email, password });
+            const respuesta = await api.post('/auth/login', { email: correo, password: passAcceso });
             const { accessToken, rol } = respuesta.data;
 
             setToken(accessToken);
@@ -36,7 +36,7 @@ export default function LoginPage() {
             router.push('/dashboard');
         } catch (err: any) {
             console.error("Error en login:", err);
-            setError('Credenciales incorrectas, porfavor verifique su correo y contraseña');
+            setError('credenciales incorrectas, porfavor verifique su correo y contraseña');
         } finally {
             setBotonVisible(false);
         }
@@ -61,7 +61,7 @@ export default function LoginPage() {
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
+                    <form onSubmit={enviar} className="space-y-6">
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">
                                 Correo Electronico
@@ -73,8 +73,8 @@ export default function LoginPage() {
                                 <input
                                     type="email"
                                     required
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    value={correo}
+                                    onChange={(e) => setCorreo(e.target.value)}
                                     placeholder="operador@payflow.cl"
                                     className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-gray-900 placeholder-gray-400"
                                 />
@@ -92,8 +92,8 @@ export default function LoginPage() {
                                 <input
                                     type="password"
                                     required
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
+                                    value={passAcceso}
+                                    onChange={(e) => setPassAcceso(e.target.value)}
                                     placeholder="********"
                                     className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-gray-900 placeholder-gray-400"
                                 />
