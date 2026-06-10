@@ -59,7 +59,7 @@ export class ProcesamientoController {
 
     return {
       mensaje: 'Archivo procesado exitosamente',
-      archivo_id: archivoId,
+      nombreArchivo: archivoId,
       fecha_hora: fechaHora.toISOString(),
       registros_banco: insertadas,
       discrepancias_encontradas: discrepancias,
