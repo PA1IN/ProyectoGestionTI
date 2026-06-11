@@ -1,18 +1,25 @@
 import { useState } from 'react';
 
-export const FormTarjeta = ({ onSubmit, isProcessing }: { onSubmit: (datos: { numeroTarjeta: string; fechaExpiracion: string; cvv: string }) => void; isProcessing: boolean }) => {
+export const FormTarjeta = ({ onSubmit, isProcessing }: { onSubmit: (datos: { numeroTarjeta: string; fechaExpiracion: string; cvv: string, titular: string }) => void; isProcessing: boolean }) => {
+    const [titular, setTitular] = useState('');
     const [numeroTarjeta, setNumeroTarjeta] = useState('');
     const [vencimiento, setVencimiento] = useState('');
     const [cvv, setCvv] = useState('');
     
-    const handleNumeroChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const titularChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        // validar la entrada para incluir solo letras y espacios
+        const valor = e.target.value.replace(/[^a-zA-Z\s]/g, '').toUpperCase();
+        setTitular(valor);
+    };
+
+    const numeroChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         // formatear el numero de tarjeta en grupos de 4 digitos
         const valor = e.target.value.replace(/\D/g, '').substring(0, 16); // eliminar cualquier caracter que no sea un numero
         const numeroFormateado = valor.match(/.{1,4}/g)?.join(' ') || valor; // formateo de tarjeta
         setNumeroTarjeta(numeroFormateado);
     };
 
-    const handleVencimientoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const vencimientoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         // formatear el vencimiento en formato MM/AA
         let valor = e.target.value.replace(/\D/g, '').substring(0, 4); // eliminar cualquier caracter que no sea un numero
         if (valor.length >= 3) {
@@ -21,17 +28,17 @@ export const FormTarjeta = ({ onSubmit, isProcessing }: { onSubmit: (datos: { nu
         setVencimiento(valor);
     }
 
-    const handleCvvChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const cvvChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         // formatear el CVV en formato de 3 o 4 digitos
         const valor = e.target.value.replace(/\D/g, '').substring(0, 3); // eliminar cualquier caracter que no sea un numero
         setCvv(valor);
     }
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const enviar = (e: React.FormEvent) => {
         e.preventDefault();
         // eliminar espacios del numero de tarjeta antes de enviar
         const numeroLimpio = numeroTarjeta.replace(/\s/g, '');
-        onSubmit({ numeroTarjeta: numeroLimpio, fechaExpiracion: vencimiento, cvv });
+        onSubmit({ numeroTarjeta: numeroLimpio, fechaExpiracion: vencimiento, cvv, titular });
     }
 
     return (
@@ -56,13 +63,24 @@ export const FormTarjeta = ({ onSubmit, isProcessing }: { onSubmit: (datos: { nu
 
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={enviar} className="space-y-4">
+                <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Nombre del titular</label>
+                    <input
+                        type="text"
+                        value={titular}
+                        onChange={titularChange}
+                        placeholder="Daniel Perez"
+                        className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
+                        required
+                    />
+                </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Número de tarjeta</label>
                     <input
                         type="text" 
                         value={numeroTarjeta}
-                        onChange={handleNumeroChange}
+                        onChange={numeroChange}
                         placeholder="1234 5678 9012 3456"
                         className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono transition-all text-gray-900"
                         required
@@ -74,7 +92,7 @@ export const FormTarjeta = ({ onSubmit, isProcessing }: { onSubmit: (datos: { nu
                         <input
                             type="text"
                             value={vencimiento}
-                            onChange={handleVencimientoChange}
+                            onChange={vencimientoChange}
                             placeholder="MM/AA"
                             className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono transition-all text-gray-900"
                             required
@@ -85,7 +103,7 @@ export const FormTarjeta = ({ onSubmit, isProcessing }: { onSubmit: (datos: { nu
                         <input
                             type="password"
                             value={cvv}
-                            onChange={handleCvvChange}
+                            onChange={cvvChange}
                             placeholder="123"
                             className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono transition-all text-gray-900"
                             required
