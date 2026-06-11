@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export const FormTarjeta = ({ onSubmit, isProcessing }: { onSubmit: (datos: { numeroTarjeta: string; vencimiento: string; cvv: string }) => void; isProcessing: boolean }) => {
+export const FormTarjeta = ({ onSubmit, isProcessing }: { onSubmit: (datos: { numeroTarjeta: string; fechaExpiracion: string; cvv: string }) => void; isProcessing: boolean }) => {
     const [numeroTarjeta, setNumeroTarjeta] = useState('');
     const [vencimiento, setVencimiento] = useState('');
     const [cvv, setCvv] = useState('');
@@ -31,7 +31,7 @@ export const FormTarjeta = ({ onSubmit, isProcessing }: { onSubmit: (datos: { nu
         e.preventDefault();
         // eliminar espacios del numero de tarjeta antes de enviar
         const numeroLimpio = numeroTarjeta.replace(/\s/g, '');
-        onSubmit({ numeroTarjeta: numeroLimpio, vencimiento, cvv });
+        onSubmit({ numeroTarjeta: numeroLimpio, fechaExpiracion: vencimiento, cvv });
     }
 
     return (

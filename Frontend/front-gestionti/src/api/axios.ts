@@ -1,7 +1,7 @@
 import axios from 'axios';
 import Cookies from 'js-cookie';
 
-const api_url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const api_url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 const api = axios.create({
     baseURL: api_url,

@@ -12,6 +12,11 @@ export class PagoController {
     return this.pagoService.createTransaction(createTransaccionDto);
   }
 
+  @Get('checkout/:token')
+  getCheckoutTransaccion(@Param('token') token: string) {
+    return this.pagoService.getCheckoutTransaccion(token);
+  }
+
   @Post('process')
   processTransaction(
     @Headers('authorization') authorization: string,

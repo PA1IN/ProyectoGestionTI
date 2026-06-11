@@ -1,11 +1,34 @@
-import React from 'react';
-import { ArrowRight, CreditCard, Lock } from 'lucide-react';
+"use client";
+
+import React, { useState } from 'react';
+import { ArrowRight, CreditCard, Lock, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import api from '@/api/axios';
 
 export default function Home() {
+  const [generandoCheckout, setGenerandoCheckout] = useState(false);
+
+  const crearPagoDemo = async () => {
+    setGenerandoCheckout(true);
+
+    try {
+      const respuesta = await api.post('/pago/transaccion', {
+        monto: 16000,
+        moneda: 'CLP',
+        nombreComercio: 'Proyecto Gestión TI',
+        returnUrl: `${window.location.origin}/resultado/exito`,
+      });
+
+      window.location.href = respuesta.data.transactionUrl;
+    } catch (error) {
+      console.error('No se pudo crear la transaccion de checkout:', error);
+      setGenerandoCheckout(false);
+      window.location.href = '/login';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans selection:bg-indigo-100 selection:text-indigo-900 flex flex-col">
-      
       <nav className="w-full bg-white border-b border-gray-100 flex items-center justify-between px-8 py-4 sticky top-0 z-50">
         <div className="flex items-center gap-2">
           <div className="bg-indigo-600 p-2 rounded-lg">
@@ -30,32 +53,41 @@ export default function Home() {
             <span className="flex h-2 w-2 rounded-full bg-indigo-600 animate-pulse"></span>
             Proyecto de Gestión TI
           </div>
-          
+
           <h1 className="text-5xl md:text-7xl font-black text-slate-900 tracking-tight mb-8 leading-tight">
             Pasarela de pagos <br className="hidden md:block"/>
           </h1>
-  
+
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link 
-              href="/checkout/demo-token-12345" 
-              className="w-full sm:w-auto px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 transition-all flex items-center justify-center gap-2 hover:-translate-y-1"
+            <button
+              type="button"
+              onClick={crearPagoDemo}
+              disabled={generandoCheckout}
+              className="w-full sm:w-auto px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 transition-all flex items-center justify-center gap-2 hover:-translate-y-1 disabled:opacity-70 disabled:hover:translate-y-0"
             >
-              Simular un Pago <ArrowRight className="w-5 h-5" />
-            </Link>
-            
+              {generandoCheckout ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Creando checkout...
+                </>
+              ) : (
+                <>
+                  Simular un Pago <ArrowRight className="w-5 h-5" />
+                </>
+              )}
+            </button>
           </div>
         </div>
       </main>
 
-
-¿      <footer className="bg-slate-900 py-12 border-t border-slate-800">
+      <footer className="bg-slate-900 py-12 border-t border-slate-800">
         <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between">
           <div className="flex items-center gap-2 mb-4 md:mb-0">
             <CreditCard className="w-5 h-5 text-indigo-500" />
             <span className="text-lg font-black text-white tracking-tight">PasarelaDePagos<span className="text-indigo-500">.</span></span>
           </div>
           <p className="text-slate-500 text-sm font-medium">
-            Proyecto Integrador Gestión TI 
+            Proyecto Integrador Gestión TI
           </p>
         </div>
       </footer>

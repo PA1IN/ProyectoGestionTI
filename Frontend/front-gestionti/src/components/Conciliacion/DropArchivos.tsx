@@ -1,11 +1,14 @@
 "use client";
 
 import React, { useState, useRef } from 'react';
-import { useSubirArchivoConciliacion } from '@/hooks/useConciliacion';
+import {
+    ProcesamientoConciliacionResponse,
+    useSubirArchivoConciliacion,
+} from '@/hooks/useConciliacion';
 import { UploadCloud, FileText, Loader2, CheckCircle2, AlertCircle, X } from 'lucide-react';
 
 interface DropProps {
-    onArchivoProcesado: (datos: any) => void;
+    onArchivoProcesado: (datos: ProcesamientoConciliacionResponse) => void;
 }
 
 export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
@@ -29,10 +32,10 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
     const validarArchivo = (arch: File) => {
         if(!arch) return;
 
-        const formatosValidos = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-        if(!formatosValidos.includes(arch.type) && !arch.name.endsWith('.csv')) {
+        const esCsv = arch.name.toLowerCase().endsWith('.csv');
+        if(!esCsv) {
             setEstado('error');
-            setMensajeError('Formato no válido. Suba un archivo .CSV o .XLSX');
+            setMensajeError('Formato no válido. Suba un archivo .CSV');
             setArchivo(null);
             return;
         }
@@ -61,7 +64,11 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
         setEstado('subiendo');
 
         try {
-            const resultados = await subirArchivo.mutateAsync(archivo);
+            const resultados = await subirArchivo.mutateAsync({
+                archivo,
+                fechaHora: new Date().toISOString(),
+                archivoId: archivo.name,
+            });
             setEstado('exito');
             onArchivoProcesado(resultados);
         } catch(err) {
@@ -96,7 +103,7 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
                         className="hidden"
                         ref={inputRef}
                         onChange={handleSeleccionManual}
-                        accept=".csv, application/vnd.openxmlformats-officedocument.sheet, application/vnd.ms-excel"
+                        accept=".csv,text/csv"
                     />
                     {!archivo ? (
                         <>
@@ -104,7 +111,7 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
                                 <UploadCloud className={`w-8 h-8 ${arrastrando ? 'text-indigo-600' : 'text-gray-400'}`}/>
                             </div>
                             <p className="text-sm font-bold text-gray-700">Haz click o arrastra tu archivo aquí</p>
-                            <p className="text-sm font-bold text-gray-400">Soporta formatos .CSV o .XLSX bancarios</p>
+                            <p className="text-sm font-bold text-gray-400">Soporta formato .CSV bancario</p>
                         </>
                     ) : (
                         <div className="flex flex-col items-center w-full">
@@ -148,7 +155,7 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
                     <CheckCircle2 className="w-16 h-16 text-emerald-500 mb-4"/>
                     <h3 className="text-lg font-bold text-emerald-900">Archivo Procesado con exito</h3>
                     <p className="text-sm text-emerald-700 mt-2 max-w-md">
-                        El motor de matching cruzó los datos bancarios con los registro de la base de datos de la pasarela de pago.
+                        El backend registró el archivo bancario y ejecutó la conciliación.
                     </p>
                     <button
                         onClick={resetear}

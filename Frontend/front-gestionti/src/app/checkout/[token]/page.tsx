@@ -3,7 +3,7 @@
 import React, { useState, use } from 'react';
 import { useDetalleTransaccion, useProcesarPago, DatosPagoTarjeta } from '@/hooks/useCheckout';
 import { useRouter } from 'next/navigation';
-import { QrCode, ShieldCheck, XCircle } from 'lucide-react';
+import { ShieldCheck, XCircle } from 'lucide-react';
 import { FormTarjeta } from '@/components/Checkout/FormTarjeta';
 import { MetodosPago } from '@/components/Checkout/MetodosPago';
 import { ResumenOrden } from '@/components/Checkout/ResumenOrden';

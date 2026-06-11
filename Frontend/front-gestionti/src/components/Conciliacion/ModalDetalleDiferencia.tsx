@@ -1,10 +1,17 @@
 import React from 'react';
 import { X, AlertTriangle, ArrowRight, ShieldAlert, CheckCircle2, Building2, Server } from 'lucide-react';
 
+interface DetalleConciliacion {
+    transaccion: string;
+    monto: number;
+    estadoBancario: string;
+    estadoInterno: string;
+}
+
 interface ModalProps { 
     abierto: boolean;
     cerrado: () => void;
-    detalle: any | null;
+    detalle: DetalleConciliacion | null;
 }
 
 export const ModalDetalleDiferenica = ({ abierto, cerrado, detalle }: ModalProps) => {

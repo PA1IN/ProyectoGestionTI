@@ -12,7 +12,7 @@ export interface DetalleTransaccion {
 
 export interface DatosPagoTarjeta {
     numeroTarjeta: string;
-    vencimiento: string; //mm/aa
+    fechaExpiracion: string; //mm/aa
     cvv: string;
     titular?: string;
 }
@@ -30,24 +30,12 @@ export interface DatosPagoTarjeta {
     })
 }*/
 
-// mock de funcion para obtener los detalles de la transaccion
 export function useDetalleTransaccion(token: string) {
     return useQuery<DetalleTransaccion>({
         queryKey: ['transaccion', token],
         queryFn: async () => {
-            
-            return new Promise((resolve) => {
-                setTimeout(() => {
-                    resolve({
-                        token: token,
-                        comercio: 'Tienda de ejemplo',
-                        montoTotal: 16000,
-                        estado: 'pendiente',
-                        urlRetorno: 'https://www.google.com',
-                        codigoQr: `bancoapp://pay?transactionId=${token}&amount=16000&currency=CLP`
-                    });
-                }, 1500);
-            });
+            const respuesta = await api.get(`/pago/checkout/${token}`);
+            return respuesta.data as DetalleTransaccion;
         },
         enabled: !!token,
         retry: false
@@ -69,16 +57,25 @@ export function useDetalleTransaccion(token: string) {
     })
 }*/
 
-// mock de funcion para procesar el pago
 export function useProcesarPago(tokenTransaccion: string) {
     return useMutation({
         mutationFn: async (datosTarjeta: DatosPagoTarjeta) => {
-            return new Promise((resolve) => {
-                setTimeout(() => {
-                    console.log('Procesando pago con los siguientes datos:', datosTarjeta, 'y token de transaccion:', tokenTransaccion);
-                    resolve({ success: true, message: 'Pago procesado exitosamente' });
-                }, 2000);
-            });
+            const respuesta = await api.post(
+                '/pago/process',
+                datosTarjeta,
+                {
+                    headers: {
+                        Authorization: `Bearer ${tokenTransaccion}`,
+                    },
+                },
+            );
+
+            return respuesta.data as {
+                status: 'APROBADO' | 'PENDIENTE' | 'RECHAZADO';
+                message: string;
+                redirectUrl: string;
+                transactionId: string;
+            };
         }
     });
 }
@@ -98,16 +95,11 @@ export function useProcesarPago(tokenTransaccion: string) {
 }*/
 
 
-//mock de funcion para generar el qr
 export function useGenerarQr(tokenTransaccion: string) {
     return useMutation({
         mutationFn: async () => {
-            return new Promise<{ qrData: string }>((resolve) => {
-                setTimeout(() => {
-                    console.log(`Pidiendo Qr para el token: ${tokenTransaccion}`);
-                    resolve({ qrData: `bancoapp://pay?transactionId=${tokenTransaccion}&amount=16000&currency=CLP` });
-                }, 1500);
-            });
+            const respuesta = await api.get(`/pago/checkout/${tokenTransaccion}`);
+            return { qrData: respuesta.data.codigoQr as string };
         }
     });
 }
@@ -127,17 +119,15 @@ export function useGenerarQr(tokenTransaccion: string) {
 }*/
 
 
-//mock para revisar el estado del qr
-export function useConsultarEstadoPago(tokenTransaccion: string, activarPolling: string)
+export function useConsultarEstadoPago(tokenTransaccion: string, activarPolling: boolean)
 {
     return useQuery({
         queryKey: ['estadoPago', tokenTransaccion],
         queryFn: async () => {
-            return new Promise<{ estado: string}>((resolve) => {
-                console.log("Consultando estado al banco...");
-                resolve({ estado: 'pendiente'});
-            });
+            const respuesta = await api.get(`/pago/checkout/${tokenTransaccion}`);
+            return { estado: respuesta.data.estado as string };
         },
+        enabled: activarPolling,
         
     })
 }
