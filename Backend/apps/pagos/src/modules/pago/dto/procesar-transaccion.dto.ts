@@ -10,9 +10,9 @@ export class ProcesarTransaccionDto {
   @Length(16, 16, { message: 'El número de tarjeta debe tener 16 dígitos' })
   numeroTarjeta!: string;
 
-  @IsNotEmpty({ message: 'El titular es requerido' })
+  @IsOptional()
   @IsString({ message: 'El titular debe ser un string' })
-  titular!: string;
+  titular?: string;
 
   @IsNotEmpty({ message: 'La fecha de expiración es requerida' })
   @IsString({ message: 'La fecha de expiración debe ser un string' })

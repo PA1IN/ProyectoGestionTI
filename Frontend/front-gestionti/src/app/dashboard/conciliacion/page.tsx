@@ -3,13 +3,13 @@ import React, { useState } from 'react';
 import { DropArchivos } from '@/components/Conciliacion/DropArchivos';
 import { FileSpreadsheet} from 'lucide-react';
 import { TablaDiferencias } from '@/components/Conciliacion/TablaDiferencias';
-import { HistorialConciliaciones } from '@/components/Conciliacion/HistorialConciliaciones';
+import { ConciliationResponse } from '@/hooks/useConciliacion';
 
 export default function ConciliacionPage() {
-    const [resultadosConciliacion, setResultadosConciliacion ] = useState<any[] | null>(null);
+    const [resultadoConciliacion, setResultadoConciliacion ] = useState<ConciliationResponse | null>(null);
 
-    const handleArchivoProcesado = (datos: any[]) => {
-        setResultadosConciliacion(datos);
+    const handleArchivoProcesado = (datos: ConciliationResponse) => {
+        setResultadoConciliacion(datos);
     };
 
     return(
@@ -33,10 +33,14 @@ export default function ConciliacionPage() {
                 <DropArchivos onArchivoProcesado={handleArchivoProcesado}/>
             </div>
 
-            {resultadosConciliacion ? (
-                <TablaDiferencias resultados={resultadosConciliacion}/>
+            {resultadoConciliacion ? (
+                <TablaDiferencias resultado={resultadoConciliacion}/>
             ) : (
-                <HistorialConciliaciones/>
+                <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 mt-8">
+                    <p className="text-sm text-gray-500">
+                        Sube un archivo CSV para ejecutar la conciliación y ver el resumen devuelto por el backend.
+                    </p>
+                </div>
             )}
         </div>
     );

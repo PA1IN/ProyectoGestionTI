@@ -5,6 +5,9 @@ import { PagosModule } from './pagos.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(PagosModule);
+
+  app.enableCors();
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

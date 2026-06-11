@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import type { StringValue } from 'ms';
@@ -33,6 +33,25 @@ type ProcessTransactionResult = {
     moneda: string;
     nombreComercio: string;
   };
+};
+
+type CheckoutPayload = {
+  transactionId: string;
+  monto: number;
+  moneda: string;
+  nombreComercio: string;
+  returnUrl: string;
+  tipo: 'transaccion-init';
+  iatAt: string;
+};
+
+type CheckoutDetail = {
+  token: string;
+  comercio: string;
+  montoTotal: number;
+  estado: 'pendiente' | 'aprobada' | 'rechazada';
+  urlRetorno: string;
+  codigoQr: string;
 };
 
 const mapEstadoTarjetaToRespuesta = (estado: EstadoTarjeta): EstadoRespuestaTransaccion => {
@@ -112,6 +131,37 @@ export class PagoService {
     };
   }
 
+  async getCheckoutTransaccion(token: string): Promise<CheckoutDetail> {
+    try {
+      const payload = await this.jwtService.verifyAsync<CheckoutPayload>(token, {
+        secret: this.configService.get<string>('JWT_SECRET'),
+      });
+
+      const transaccion = await this.transaccionRepository.findOne({
+        where: { id: payload.transactionId },
+      });
+
+      const estado = !transaccion
+        ? 'pendiente'
+        : transaccion.estado === EstadoTransaccionDb.SUCCESS
+          ? 'aprobada'
+          : transaccion.estado === EstadoTransaccionDb.REJECTED || transaccion.estado === EstadoTransaccionDb.FAILED
+            ? 'rechazada'
+            : 'pendiente';
+
+      return {
+        token,
+        comercio: payload.nombreComercio,
+        montoTotal: payload.monto,
+        estado,
+        urlRetorno: payload.returnUrl,
+        codigoQr: `bancoapp://pay?transactionId=${payload.transactionId}&amount=${payload.monto}&currency=${payload.moneda}`,
+      };
+    } catch {
+      throw new UnauthorizedException('Token inválido o expirado');
+    }
+  }
+
   async processTransaction(token: string, procesarTransaccionDto: ProcesarTransaccionDto): Promise<ProcessTransactionResult> {
     try {
       const payload = await this.jwtService.verifyAsync<TransactionPayload>(token, {
@@ -182,8 +232,7 @@ export class PagoService {
           nombreComercio: payload.nombreComercio,
         },
       };
-    }
-      catch (error) {
+    } catch (error) {
         return {
           status: EstadoRespuestaTransaccion.RECHAZADO,
           message: 'Token inválido o expirado',
