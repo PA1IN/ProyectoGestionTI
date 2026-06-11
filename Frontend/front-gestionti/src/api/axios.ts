@@ -1,5 +1,5 @@
 import axios from 'axios';
-import Cookies from 'js-cookie';
+import keycloak from '@/auth/keycloak';
 
 const api_url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002';
 
@@ -8,8 +8,12 @@ const api = axios.create({
 });
 
 // Intercepta las solicitudes para agregar el token de autenticación
-api.interceptors.request.use((config) => { 
-    const token = Cookies.get('token'); // pa obtener el token de las cookies
+api.interceptors.request.use(async (config) => {
+    if (keycloak.authenticated) {
+        await keycloak.updateToken(30);
+    }
+
+    const token = keycloak.token;
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }

@@ -1,22 +1,20 @@
 "use client";
 
-import React from 'react';
-import {useRouter, usePathname } from 'next/navigation';
+import React, { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Menulateral } from '@/components/Dashboard/Menulateral';
 import { TopBar } from '@/components/Dashboard/TopBar';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-    const { token, loading, logout } = useAuth();
-    //const router = useRouter();
-    //const pathname = usePathname();
+    const { loading, autenticado, isAdmin } = useAuth();
+    const router = useRouter();
 
-    /*useEffect(() => {
-        if(!loading && !token)
-        {
-            router.push('/login');
+    useEffect(() => {
+        if (!loading && (!autenticado || !isAdmin)) {
+            router.replace('/login');
         }
-    }, [token, loading, router]);*/
+    }, [loading, autenticado, isAdmin, router]);
 
     if(loading) {
         return (
@@ -26,9 +24,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         );
     }
 
-    /*if(!token) {
+    if (!autenticado || !isAdmin) {
         return null;
-    }*/
+    }
 
 
 
