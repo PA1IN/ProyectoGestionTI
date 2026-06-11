@@ -1,6 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { IsArray } from 'class-validator';
-import { DataSource } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { EstadoDiscrepancia, DiscrepanciaConciliacion } from './procesamiento/entities/discrepancia-conciliacion.entity';
+
+const USUARIO_SISTEMA_UUID = '00000000-0000-0000-0000-000000000000'; //cabmiar a una validacion con el auth del grupo 12
+
+export interface DiscrepanciaResumen {
+  id: number;
+  rrn: number | null;
+  tipo: string;
+  estado: string;
+}
 
 @Injectable()
 export class ConciliacionService {
@@ -8,12 +18,14 @@ export class ConciliacionService {
 
   constructor(
     private readonly dataSource: DataSource,
+    @InjectRepository(DiscrepanciaConciliacion)
+    private readonly discrepanciaRepository: Repository<DiscrepanciaConciliacion>,
   ) {}
 
   async conciliar(
     fechaHora: Date,
     archivoId: string,
-  ): Promise<number> {
+  ): Promise<DiscrepanciaResumen[]> {
     this.logger.log(
       `Iniciando conciliación: fecha=${fechaHora.toISOString()}, archivo=${archivoId}`,
     );
@@ -21,16 +33,42 @@ export class ConciliacionService {
     const discrepancias = await this.joinTables(fechaHora, archivoId);
 
     this.logger.log(
-      `Conciliación completada: archivo=${archivoId}, ${discrepancias} discrepancias encontradas`,
+      `Conciliación completada: archivo=${archivoId}, ${discrepancias.length} discrepancias encontradas`,
     );
 
     return discrepancias;
   }
 
+  async getDiscrepancyByRrn(rrn: number): Promise<DiscrepanciaConciliacion | null> {
+    return this.discrepanciaRepository
+      .createQueryBuilder('discrepancia')
+      .where('discrepancia.rrn = :rrn', { rrn })
+      .orderBy('discrepancia.created_at', 'DESC')
+      .getOne();
+  }
+
+  async closeDiscrepancyByRrn(
+    rrn: number,
+    resueltoPor = USUARIO_SISTEMA_UUID,
+  ): Promise<DiscrepanciaConciliacion | null> {
+    const resultado = await this.discrepanciaRepository
+      .createQueryBuilder()
+      .update(DiscrepanciaConciliacion)
+      .set({
+        estado: EstadoDiscrepancia.CERRADA,
+        resuelto_por: resueltoPor,
+      })
+      .where('rrn = :rrn', { rrn })
+      .returning('*')
+      .execute();
+
+    return (resultado.raw?.[0] as DiscrepanciaConciliacion | undefined) ?? null;
+  }
+
   private async joinTables(
     fechaHora: Date,
     archivoId: string,
-  ): Promise<number> {
+  ): Promise<DiscrepanciaResumen[]> {
     const fechaHoraStr = fechaHora.toISOString();
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -65,19 +103,24 @@ export class ConciliacionService {
             OR t.id IS NULL
             OR ct.rrn_banco IS NULL 
           )
-          RETURNING id;
+          RETURNING id, rrn, tipo, estado;
         `,
         [fechaHoraStr, archivoId],
       );
 
       await queryRunner.commitTransaction();
-      Logger.log(result);
 
-      if (IsArray(result)) {
-        return result.length;
-      }
-
-      return result.rowCount ?? 0;
+      return Array.isArray(result)
+        ? result.map((discrepancia: Record<string, unknown>): DiscrepanciaResumen => ({
+            id: Number(discrepancia.id),
+            rrn:
+              discrepancia.rrn === null || discrepancia.rrn === undefined
+                ? null
+                : Number(discrepancia.rrn),
+            tipo: String(discrepancia.tipo),
+            estado: String(discrepancia.estado),
+          }))
+        : [];
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Error en matching archivo ${archivoId}`, error);
