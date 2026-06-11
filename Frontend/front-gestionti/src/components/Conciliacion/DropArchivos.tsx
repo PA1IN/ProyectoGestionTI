@@ -62,7 +62,7 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
         setEstado('subiendo');
 
         try {
-            const resultados = await subirArchivo.mutateAsync(archivo);
+            const resultados = await subirArchivo.mutateAsync({ archivo });
             setEstado('exito');
             onArchivoProcesado(resultados);
         } catch(err) {
@@ -149,7 +149,7 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
                     <CheckCircle2 className="w-16 h-16 text-emerald-500 mb-4"/>
                     <h3 className="text-lg font-bold text-emerald-900">Archivo Procesado con exito</h3>
                     <p className="text-sm text-emerald-700 mt-2 max-w-md">
-                        El motor de matching cruzó los datos bancarios con los registro de la base de datos de la pasarela de pago.
+                        Se cruzaron los datos bancarios con los registro de la base de datos de la pasarela de pago.
                     </p>
                     <button
                         onClick={resetear}

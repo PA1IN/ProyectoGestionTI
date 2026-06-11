@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { IsArray } from 'class-validator';
 import { DataSource } from 'typeorm';
 
 @Injectable()
@@ -42,34 +43,39 @@ export class ConciliacionService {
         INSERT INTO discrepancias_conciliacion
           (rrn, tipo, monto_interno, monto_banco, fecha_conciliacion, archivo_id, estado)
         SELECT
-          COALESCE(t.rrn, ct.rrn_banco)                       AS rrn,
+          COALESCE(t.rrn, ct.rrn_banco)                      AS rrn,
           CASE
-            WHEN t.id IS NULL        THEN 'EXISTE_EN_BANCO'
+            WHEN t.id IS NULL         THEN 'EXISTE_EN_BANCO'
             WHEN ct.rrn_banco IS NULL THEN 'FALTANTE_EN_BANCO'
-            ELSE                          'DIFERENCIA_DE_MONTO'
-          END::discrepancia_tipo                               AS tipo,
-          t.monto                                              AS monto_interno,
-          ct.monto_externo                                     AS monto_banco,
-          $1::timestamp                                        AS fecha_conciliacion,
-          $2                                                   AS archivo_id,
-          'ABIERTA'::discrepancia_estado                       AS estado
+            ELSE                           'DIFERENCIA_DE_MONTO'
+          END::discrepancia_tipo                             AS tipo,
+          t.monto                                            AS monto_interno,
+          ct.monto_externo                                   AS monto_banco,
+          $1::timestamp                                      AS fecha_conciliacion,
+          $2                                                 AS archivo_id,
+          'ABIERTA'::discrepancia_estado                     AS estado
         FROM transaccion t
         FULL OUTER JOIN conciliacion_temporal ct
-          ON  t.rrn = ct.rrn_banco
-          AND ct.fecha_hora = $1::timestamp
+          ON t.rrn = ct.rrn_banco
           AND ct.archivo_id = $2
         WHERE
-          DATE(t.created_at) = DATE($1::timestamp)
+          COALESCE(DATE(t.created_at), DATE(ct.fecha_hora)) = DATE($1::timestamp)
           AND (
             t.monto != ct.monto_externo
             OR t.id IS NULL
-            OR ct.rrn_banco IS NULL
+            OR ct.rrn_banco IS NULL 
           )
+          RETURNING id;
         `,
         [fechaHoraStr, archivoId],
       );
 
       await queryRunner.commitTransaction();
+      Logger.log(result);
+
+      if (IsArray(result)) {
+        return result.length;
+      }
 
       return result.rowCount ?? 0;
     } catch (error) {
