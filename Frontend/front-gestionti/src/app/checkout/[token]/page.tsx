@@ -22,10 +22,17 @@ export default function CheckoutPage({ params }: { params: Promise<{ token: stri
 
     const ProcesarPago = async (datosTarjeta: DatosPagoTarjeta) => {
         try {
-            await procesarPago.mutateAsync(datosTarjeta);
+            const respuesta = await procesarPago.mutateAsync(datosTarjeta);
 
             const returnUrl = transaccion?.urlRetorno || '/';
             const encodedReturnUrl = encodeURIComponent(returnUrl);
+
+            if (respuesta.status === 'RECHAZADO')
+            {
+                console.warn("error al procesar pago, pago rechazado por el back:", respuesta.message);
+                router.push(`/resultado/fallo?token=${token}&comercio=${transaccion?.comercio}&returnUrl=${encodedReturnUrl}`);
+                return;
+            }
 
             router.push(`/resultado/exito?comercio=${transaccion?.comercio}&returnUrl=${encodedReturnUrl}`);
         } catch (error) {
