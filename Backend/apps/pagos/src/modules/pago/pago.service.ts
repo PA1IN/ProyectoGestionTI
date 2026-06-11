@@ -77,23 +77,23 @@ export class PagoService {
   ) {}
 
   async createTransaction(createTransaccionDto: CreateTransaccionDto) {
-    const expiresInRaw = this.configService.get<string>('JWT_EXPIRES_IN') || '15m';
-    const expiresIn = /^\d+$/.test(expiresInRaw) //se crea el token
+    const expiresInRaw = this.configService.get<string>('JWT_EXPIRES_IN') || '15m'; //se crea el token con un tiempo definido
+    const expiresIn = /^\d+$/.test(expiresInRaw) 
       ? Number(expiresInRaw)
       : (expiresInRaw as StringValue);
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'; // se obtiene la url del env o se usa la default
 
-    const transaccion = await this.transaccionRepository.save(
-      this.transaccionRepository.create({ //se guarda la transaccion en la base de datos
-        monto: createTransaccionDto.monto.toFixed(2),
+    const transaccion = await this.transaccionRepository.save(//se guarda la transaccion en la base de datos
+      this.transaccionRepository.create({ 
+        monto: createTransaccionDto.monto.toFixed(2), //se guarda el monto utilizando solo 2 decimales
         moneda: createTransaccionDto.moneda,
         estado: EstadoTransaccionDb.PENDING,
-        idOrden: `ORD-${Date.now()}`,
+        idOrden: `ORD-${Date.now()}`, // se genera la id utilizando la fecha
       }),
     );
 
     const payload: TransactionPayload = { // se usa la interfaz antes creada para generar el token de respuesta
-      transactionId: transaccion.id,
+      transactionId: transaccion.id,  //se rellena el payload con el dto
       monto: createTransaccionDto.monto,
       moneda: createTransaccionDto.moneda,
       nombreComercio: createTransaccionDto.nombreComercio,
@@ -105,7 +105,7 @@ export class PagoService {
     const token = await this.jwtService.signAsync(payload, { expiresIn });
     const transactionUrl = `${frontendUrl}/checkout/${encodeURIComponent(token)}`;
 
-    return {
+    return { //se devuelve el token y se adjunta la url para rederigir el front al final de la transaccion
       token,
       transactionUrl,
       transactionId: transaccion.id,
@@ -153,7 +153,7 @@ export class PagoService {
       );
 
       transaccion.estado = mapEstadoApiToDb(status); //se guarda el estado de la transaccion en la base de datos
-      transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
+      transaccion.rrn = Math.floor(100000 + Math.random() * 900000);//se utiliza un random para simular un numero de referencia
       await this.transaccionRepository.save(transaccion);
 
       await this.historialRepository.save(
