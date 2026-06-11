@@ -233,6 +233,7 @@ export class PagoService {
         },
       };
     } catch (error) {
+      Logger.error('Error al procesar la transacción', error);
         return {
           status: EstadoRespuestaTransaccion.RECHAZADO,
           message: 'Token inválido o expirado',
