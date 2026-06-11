@@ -8,6 +8,16 @@ function ExitoComponent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const comercio = searchParams.get('comercio');
+    const redirectUrl = searchParams.get('redirectUrl');
+
+    const volveraUrl = () => {
+        if(redirectUrl)
+        {
+            window.location.href = redirectUrl;
+        } else {
+            router.push('/');
+        }
+    }
 
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -20,7 +30,7 @@ function ExitoComponent() {
                     La hay transaccion en <span className="font-bold text-gray-800">{comercio}</span> ha sido procesada y autorizada correctamente.
                 </p>
                 <button
-                    onClick={() => router.push('/')} //redirigir a la pagina original del comercio
+                    onClick={volveraUrl} //redirigir a la pagina original del comercio
                     className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl transition-colors"
                 >
                     Regresar al comercio

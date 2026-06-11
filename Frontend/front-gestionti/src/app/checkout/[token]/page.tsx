@@ -24,8 +24,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ token: stri
         try {
             const respuesta = await procesarPago.mutateAsync(datosTarjeta);
 
-            const returnUrl = transaccion?.urlRetorno || '/';
-            const encodedReturnUrl = encodeURIComponent(returnUrl);
+            //const returnUrl = transaccion?.urlRetorno || '/';
+            const encodedReturnUrl = encodeURIComponent(respuesta.redirectUrl);
 
             if (respuesta.status === 'RECHAZADO')
             {
