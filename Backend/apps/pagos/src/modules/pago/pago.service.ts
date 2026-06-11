@@ -12,9 +12,8 @@ import { EstadoRespuestaTransaccion } from './enums/estado-respuesta-transaccion
 import { EstadoTransaccionDb, Transaccion } from './entities/transaccion.entity';
 import { HistorialTransaccion } from './entities/historial-transaccion.entity';
 import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.entity';
-import { RabbitMqPublisherService } from './rabbitmq/rabbitmq-publisher.service';
 
-type TransactionPayload = { //mapeando el payload del token
+type TransactionPayload = {
   transactionId: string;
   monto: number;
   moneda: string;
@@ -24,7 +23,7 @@ type TransactionPayload = { //mapeando el payload del token
   iatAt: string;
 };
 
-type ProcessTransactionResult = { //maopeando respuesta de transaccion
+type ProcessTransactionResult = {
   status: EstadoRespuestaTransaccion;
   message: string;
   redirectUrl: string;
@@ -56,7 +55,7 @@ type CheckoutDetail = {
 };
 
 const mapEstadoTarjetaToRespuesta = (estado: EstadoTarjeta): EstadoRespuestaTransaccion => {
-  switch (estado) { //Map para mayor fluidez en las respuestas
+  switch (estado) {
     case EstadoTarjeta.APROBADO:
       return EstadoRespuestaTransaccion.APROBADO;
     case EstadoTarjeta.PENDIENTE:
@@ -68,7 +67,7 @@ const mapEstadoTarjetaToRespuesta = (estado: EstadoTarjeta): EstadoRespuestaTran
 };
 
 const mapEstadoApiToDb = (estado: EstadoRespuestaTransaccion): EstadoTransaccionDb => {
-  switch (estado) { //Map para mayor fluidez en las respuestas
+  switch (estado) {
     case EstadoRespuestaTransaccion.APROBADO:
       return EstadoTransaccionDb.SUCCESS;
     case EstadoRespuestaTransaccion.PENDIENTE:
@@ -84,7 +83,6 @@ export class PagoService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly rabbitMqPublisherService: RabbitMqPublisherService,
     @InjectRepository(Tarjeta)
     private readonly tarjetaService: Repository<Tarjeta>,
     @InjectRepository(Transaccion)
@@ -96,23 +94,23 @@ export class PagoService {
   ) {}
 
   async createTransaction(createTransaccionDto: CreateTransaccionDto) {
-    const expiresInRaw = this.configService.get<string>('JWT_EXPIRES_IN') || '15m'; //se crea el token con un tiempo definido
-    const expiresIn = /^\d+$/.test(expiresInRaw) 
+    const expiresInRaw = this.configService.get<string>('JWT_EXPIRES_IN') || '15m';
+    const expiresIn = /^\d+$/.test(expiresInRaw)
       ? Number(expiresInRaw)
       : (expiresInRaw as StringValue);
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'; // se obtiene la url del env o se usa la default
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
 
-    const transaccion = await this.transaccionRepository.save(//se guarda la transaccion en la base de datos
-      this.transaccionRepository.create({ 
-        monto: createTransaccionDto.monto.toFixed(2), //se guarda el monto utilizando solo 2 decimales
+    const transaccion = await this.transaccionRepository.save(
+      this.transaccionRepository.create({
+        monto: createTransaccionDto.monto.toFixed(2),
         moneda: createTransaccionDto.moneda,
         estado: EstadoTransaccionDb.PENDING,
-        idOrden: `ORD-${Date.now()}`, // se genera la id utilizando la fecha
+        idOrden: `ORD-${Date.now()}`,
       }),
     );
 
-    const payload: TransactionPayload = { // se usa la interfaz antes creada para generar el token de respuesta
-      transactionId: transaccion.id,  //se rellena el payload con el dto
+    const payload: TransactionPayload = {
+      transactionId: transaccion.id,
       monto: createTransaccionDto.monto,
       moneda: createTransaccionDto.moneda,
       nombreComercio: createTransaccionDto.nombreComercio,
@@ -124,7 +122,7 @@ export class PagoService {
     const token = await this.jwtService.signAsync(payload, { expiresIn });
     const transactionUrl = `${frontendUrl}/checkout/${encodeURIComponent(token)}`;
 
-    return { //se devuelve el token y se adjunta la url para rederigir el front al final de la transaccion
+    return {
       token,
       transactionUrl,
       transactionId: transaccion.id,
@@ -165,15 +163,13 @@ export class PagoService {
   }
 
   async processTransaction(token: string, procesarTransaccionDto: ProcesarTransaccionDto): Promise<ProcessTransactionResult> {
-    let payload: TransactionPayload | undefined;
-
     try {
-      payload = await this.jwtService.verifyAsync<TransactionPayload>(token, {
-        secret: this.configService.get<string>('JWT_SECRET'), //se desencripta el token para ver la payload
+      const payload = await this.jwtService.verifyAsync<TransactionPayload>(token, {
+        secret: this.configService.get<string>('JWT_SECRET'),
       });
 
       const transaccion = await this.transaccionRepository.findOne({ where: { id: payload.transactionId } });
-      if (!transaccion) { //se busca la transaccion si no se encuentra se rechaza la transaccion y envia un mensaje de error
+      if (!transaccion) {
         return {
           status: EstadoRespuestaTransaccion.RECHAZADO,
           message: 'Transacción no encontrada',
@@ -181,14 +177,14 @@ export class PagoService {
           redirectUrl: `${payload.returnUrl}?status=RECHAZADO&transactionId=${payload.transactionId}`,
         };
       }
-      //se comprueba la tarjeta, si se encuentra y los datos son validos
+
       const card = await this.tarjetaService.findOne({ where: { numero: procesarTransaccionDto.numeroTarjeta } });
       const cardIsValid = Boolean(card && card.cvv === procesarTransaccionDto.cvv && card.fechaExpiracion === procesarTransaccionDto.fechaExpiracion);
       const status = cardIsValid && card ? mapEstadoTarjetaToRespuesta(card.estado) : EstadoRespuestaTransaccion.RECHAZADO;
       const previousStatus = transaccion.estado;
 
       await this.detalleRepository.save(
-        this.detalleRepository.create({ //se aprueba la transaccion y se guarda un detalle
+        this.detalleRepository.create({
           transaccion,
           nombreUsuario: procesarTransaccionDto.titular,
           rut: procesarTransaccionDto.rut ?? '',
@@ -202,8 +198,8 @@ export class PagoService {
         }),
       );
 
-      transaccion.estado = mapEstadoApiToDb(status); //se guarda el estado de la transaccion en la base de datos
-      transaccion.rrn = Math.floor(100000 + Math.random() * 900000);//se utiliza un random para simular un numero de referencia
+      transaccion.estado = mapEstadoApiToDb(status);
+      transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
       await this.transaccionRepository.save(transaccion);
 
       await this.historialRepository.save(
@@ -217,7 +213,7 @@ export class PagoService {
       const isApproved = status === EstadoRespuestaTransaccion.APROBADO;
       const transactionId = transaccion.id;
 
-      return { //se devuelven los resultados ya sea error o aprobar
+      return {
         status,
         message: !card
           ? 'Tarjeta no encontrada'
@@ -236,52 +232,17 @@ export class PagoService {
           nombreComercio: payload.nombreComercio,
         },
       };
-    } catch (error) { //catch de error para manejar tokens invalidos
-      Logger.error(error, 'Error al procesar la transacción');
-      const isJwtError = this.isExpectedJwtError(error);
-
-      if (this.shouldPublishTechnicalAlert(error)) { // se levanta una alerta de rabbitmq
-        await this.rabbitMqPublisherService.publishTransactionFailure({
-          transactionId: payload?.transactionId ?? 'unknown',
-          monto: payload?.monto,
-          moneda: payload?.moneda,
-          nombreComercio: payload?.nombreComercio,
-          reason: error instanceof Error ? error.message : 'Error inesperado',
-          errorName: error instanceof Error ? error.name : 'UnknownError',
-          stage: payload ? 'process-transaction' : 'token-validation',
-          occurredAt: new Date().toISOString(),
-        });
+    } catch (error) {
+      Logger.error('Error al procesar la transacción', error);
+        return {
+          status: EstadoRespuestaTransaccion.RECHAZADO,
+          message: 'Token inválido o expirado',
+          transactionId: 'unknown',
+          redirectUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'}?status=RECHAZADO&transactionId=unknown`,
+        };
       }
-      //se envia un mensaje de error al frontend para que no se caiga la pagina
-      const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-      const transactionId = payload?.transactionId ?? 'unknown';
-      const redirectUrl = payload?.returnUrl
-        ? `${payload.returnUrl}?status=RECHAZADO&transactionId=${transactionId}`
-        : `${frontendUrl}?status=RECHAZADO&transactionId=${transactionId}`;
-
-      return { //return estandar
-        status: EstadoRespuestaTransaccion.RECHAZADO,
-        message: isJwtError ? 'Token inválido o expirado' : 'Error interno al procesar la transacción',
-        transactionId,
-        redirectUrl,
-      };
-    }
   }
-
-    private isExpectedJwtError(error: unknown): boolean { //funcion para indentificar errores
-      if (!(error instanceof Error)) {
-        return false;
-      }
-
-      const expectedJwtErrors = ['TokenExpiredError', 'JsonWebTokenError', 'NotBeforeError'];
-      return expectedJwtErrors.includes(error.name);
-    }
-
-  private shouldPublishTechnicalAlert(error: unknown): boolean { //bool para rabbitmq
-    return !this.isExpectedJwtError(error);
-  }
-
-  async getDetalleTransaccion(id: number) { // get generico para obtener una transaccion
+  async getDetalleTransaccion(id: number) {
     const detalle = await this.detalleRepository.findOne({
       where: { id },
       relations: ['transaccion'],
@@ -300,7 +261,7 @@ export class PagoService {
       emisorTarjeta: detalle.emisorTarjeta,
     };
   }
-  async getHistorialTransaccion(id: string) { // get generico para obtener el historial de una transaccion
+  async getHistorialTransaccion(id: string) {
     const historial = await this.historialRepository.find({
       where: { transaccion: { id } },
       relations: ['transaccion'],
@@ -315,17 +276,25 @@ export class PagoService {
       createdAt: entry.createdAt,
     }));
   }
-  async getAllTransacciones() { //get generico
+  async getAllTransacciones() {
     const transacciones = await this.transaccionRepository.find({ relations: ['detalles', 'historial'] });
     return transacciones;
   }
-  async getAllDetalles() { //get generico
+  async getAllDetalles() {
     const detalles = await this.detalleRepository.find({ relations: ['transaccion'] });
     return detalles;
   }
-  async getAllHistoriales() { //get generico
+  async getAllHistoriales() {
     const historiales = await this.historialRepository.find({ relations: ['transaccion'] });
     return historiales;
   }
   
+
+  findAll() {
+    return `This action returns all pago`;
+  }
+
+  findOne(id: number) {
+    return `This action returns a #${id} pago`;
+  }
 }
