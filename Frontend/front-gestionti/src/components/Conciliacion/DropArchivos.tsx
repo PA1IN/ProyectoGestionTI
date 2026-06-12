@@ -65,10 +65,11 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
             const resultados = await subirArchivo.mutateAsync({ archivo });
             setEstado('exito');
             onArchivoProcesado(resultados);
-        } catch(err) {
+        } catch(err: any) {
             console.error("error al procesar el archivo:", err);
             setEstado('error');
-            setMensajeError('hubo un problema de red al comunicarse con el servidor')
+            const respBackend = err?.response?.data?.message || err?.message || 'hubo un problema de red al comunicarse con el servidor';
+            setMensajeError(respBackend);
         }
     };
 
