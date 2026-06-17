@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Req,
   Res,
   UploadedFile,
   UseInterceptors,
@@ -17,6 +18,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { IncomingHttpHeaders } from 'http';
 import type { Response } from 'express';
 import { memoryStorage } from 'multer';
+import { AdminOnly } from './auth/admin.decorator';
+import { Public } from './auth/public.decorator';
 import { GatewayService } from './gateway.service';
 
 interface ProcessTransaccionBody {
@@ -38,6 +41,7 @@ export class GatewayController {
   constructor(private readonly gatewayService: GatewayService) {}
 
   @Get()
+  @Public()
   getHealth() {
     return {
       status: 'ok',
@@ -45,30 +49,22 @@ export class GatewayController {
     };
   }
 
-  @Post('auth/login')
-  async login(
-    @Body() body: Record<string, unknown>,
-    @Headers() headers: IncomingHttpHeaders,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    return this.relay(
-      response,
-      this.gatewayService.forwardJsonRequest(
-        this.gatewayService.pagosBaseUrl,
-        '/auth/login',
-        'POST',
-        body,
-        headers,
-      ),
-    );
-  }
+  @Get('auth/me')
+  async me(@Req() request: any, @Res({ passthrough: true }) response: Response) {
+    const roles = this.extractRoles(request.user);
 
-  @Get('auth/profile')
-  async profile(@Headers() headers: IncomingHttpHeaders, @Res({ passthrough: true }) response: Response) {
-    return this.relay(
-      response,
-      this.gatewayService.forwardJsonRequest(this.gatewayService.pagosBaseUrl, '/auth/profile', 'GET', undefined, headers),
-    );
+    response.status(HttpStatus.OK);
+
+    return {
+      authenticated: true,
+      sub: request.user?.sub ?? null,
+      username: request.user?.preferred_username ?? request.user?.username ?? null,
+      email: request.user?.email ?? null,
+      name: request.user?.name ?? null,
+      roles,
+      isAdmin: roles.includes('admin'),
+      tokenType: 'Bearer',
+    };
   }
 
   @Post('tarjeta')
@@ -228,9 +224,14 @@ export class GatewayController {
   @Post('pago/process')
   async processTransaction(
     @Body() body: ProcessTransaccionBody,
+    @Headers('x-transaction-token') transactionToken: string,
     @Headers() headers: IncomingHttpHeaders,
     @Res({ passthrough: true }) response: Response,
   ) {
+    if (!transactionToken) {
+      throw new BadRequestException('Se requiere el header "x-transaction-token"');
+    }
+
     return this.relay(
       response,
       this.gatewayService.forwardJsonRequest(
@@ -239,6 +240,10 @@ export class GatewayController {
         'POST',
         body,
         headers,
+        {
+          authorization: `Bearer ${transactionToken}`,
+        },
+        false,
       ),
     );
   }
@@ -283,6 +288,7 @@ export class GatewayController {
   }
 
   @Get('conciliacion/discrepancias/:rrn')
+  @AdminOnly()
   async getDiscrepancyByRrn(
     @Param('rrn', ParseIntPipe) rrn: number,
     @Headers() headers: IncomingHttpHeaders,
@@ -301,6 +307,7 @@ export class GatewayController {
   }
 
   @Patch('conciliacion/discrepancias/:rrn')
+  @AdminOnly()
   async closeDiscrepancyByRrn(
     @Param('rrn', ParseIntPipe) rrn: number,
     @Body() body: PatchDiscrepanciaBody,
@@ -328,5 +335,15 @@ export class GatewayController {
     }
 
     return proxiedResponse.body;
+  }
+
+  private extractRoles(user: any): string[] {
+    const realmRoles = Array.isArray(user?.realm_access?.roles) ? user.realm_access.roles : [];
+    const resourceAccess = user?.resource_access ?? {};
+    const clientRoles = Object.values(resourceAccess).flatMap((access: any) =>
+      Array.isArray(access?.roles) ? access.roles : [],
+    );
+
+    return [...new Set([...realmRoles, ...clientRoles].filter((role): role is string => typeof role === 'string'))];
   }
 }

@@ -25,11 +25,17 @@ export class GatewayService {
     method: string,
     body?: unknown,
     headers?: IncomingHttpHeaders,
+    extraHeaders?: Record<string, string>,
+    forwardAuthorization = true,
   ): Promise<ProxyResponse<T>> {
     try {
       const response = await fetch(new URL(path, baseUrl), {
         method,
-        headers: this.buildHeaders(headers, body === undefined ? undefined : { 'Content-Type': 'application/json' }),
+        headers: this.buildHeaders(
+          headers,
+          body === undefined ? extraHeaders : { ...(extraHeaders ?? {}), 'Content-Type': 'application/json' },
+          forwardAuthorization,
+        ),
         body: body === undefined ? undefined : JSON.stringify(body),
       });
 
@@ -45,6 +51,7 @@ export class GatewayService {
     file: Express.Multer.File,
     fields: Record<string, string | undefined>,
     headers?: IncomingHttpHeaders,
+    forwardAuthorization = true,
   ): Promise<ProxyResponse<T>> {
     const formData = new FormData();
     formData.append('archivo', new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }), file.originalname);
@@ -58,7 +65,7 @@ export class GatewayService {
     try {
       const response = await fetch(new URL(path, baseUrl), {
         method: 'POST',
-        headers: this.buildHeaders(headers),
+        headers: this.buildHeaders(headers, undefined, forwardAuthorization),
         body: formData,
       });
 
@@ -68,13 +75,22 @@ export class GatewayService {
     }
   }
 
-  private buildHeaders(headers?: IncomingHttpHeaders, extraHeaders?: Record<string, string>): Record<string, string> {
+  private buildHeaders(
+    headers?: IncomingHttpHeaders,
+    extraHeaders?: Record<string, string>,
+    forwardAuthorization = true,
+  ): Record<string, string> {
     const forwardedHeaders: Record<string, string> = { ...(extraHeaders ?? {}) };
-    const authorization = this.getHeaderValue(headers, 'authorization');
+    const authorization = forwardAuthorization ? this.getHeaderValue(headers, 'authorization') : undefined;
+    const transactionToken = this.getHeaderValue(headers, 'x-transaction-token');
     const cookie = this.getHeaderValue(headers, 'cookie');
 
     if (authorization) {
       forwardedHeaders.authorization = authorization;
+    }
+
+    if (transactionToken) {
+      forwardedHeaders['x-transaction-token'] = transactionToken;
     }
 
     if (cookie) {

@@ -1,13 +1,19 @@
 import { Module } from '@nestjs/common';
+import { PagoService } from './pago.service';
+import { PagoController } from './pago.controller';
+import { TarjetaModule } from '../tarjeta/tarjeta.module';
+import { Tarjeta } from '../tarjeta/entities/tarjeta.entity';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Transaccion } from './entities/transaccion.entity';
+import { DetalleTransaccion } from './entities/detalle-transaccion.entity';
+import { HistorialTransaccion } from './entities/historial-transaccion.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule as NestConfigModule, ConfigService } from '@nestjs/config';
 import type { StringValue } from 'ms';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Module({
   imports: [
+    TarjetaModule,
     NestConfigModule,
     JwtModule.registerAsync({
       imports: [NestConfigModule],
@@ -26,9 +32,9 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
         };
       },
     }),
+    TypeOrmModule.forFeature([Tarjeta, Transaccion, DetalleTransaccion, HistorialTransaccion]),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard],
-  exports: [AuthService, JwtModule, JwtAuthGuard],
+  controllers: [PagoController],
+  providers: [PagoService],
 })
-export class AuthModule {}
+export class PagoModule {}

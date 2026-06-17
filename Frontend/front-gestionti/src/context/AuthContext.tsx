@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import keycloak from '@/auth/keycloak';
+import api from '@/api/axios';
 
 type AdminRole = 'admin';
 
@@ -25,11 +26,22 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
 
     const obtenerRoles = useCallback(() => {
         const realmRoles = keycloak.tokenParsed?.realm_access?.roles ?? [];
-        const clientId = process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID || 'front-gestionti';
-        const clientRoles = keycloak.tokenParsed?.resource_access?.[clientId]?.roles ?? [];
-
-        return [...new Set([...realmRoles, ...clientRoles])];
+        return [...new Set([...realmRoles])];
     }, []);
+
+    const sincronizarDesdeBackend = useCallback(async () => {
+        try {
+            const respuesta = await api.get('/auth/me');
+            const rolesBackend = Array.isArray(respuesta.data?.roles) ? respuesta.data.roles : [];
+            const tieneRolAdmin = rolesBackend.includes('admin');
+
+            setToken(keycloak.token ?? null);
+            setAutenticado(true);
+            setRolUsuario(tieneRolAdmin ? 'admin' : null);
+        } catch {
+            sincronizarEstado();
+        }
+    }, [obtenerRoles]);
 
     const sincronizarEstado = useCallback(() => {
         const tokenActual = keycloak.token ?? null;
@@ -54,7 +66,11 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
 
                 if (!cancelado) {
                     setAutenticado(authenticated);
-                    sincronizarEstado();
+                    if (authenticated) {
+                        await sincronizarDesdeBackend();
+                    } else {
+                        sincronizarEstado();
+                    }
                 }
             } finally {
                 if (!cancelado) {
@@ -68,7 +84,7 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
         return () => {
             cancelado = true;
         };
-    }, [sincronizarEstado]);
+    }, [sincronizarEstado, sincronizarDesdeBackend]);
 
     const iniciarSesion = useCallback(async () => {
         if (keycloak.authenticated && obtenerRoles().includes('admin')) {
