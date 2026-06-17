@@ -7,10 +7,13 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
+    "build:gateway": "nest build gateway",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
+    "start:gateway": "nest start gateway",
+    "start:gateway:dev": "nest start gateway --watch",
     "start:prod": "node dist/apps/backend/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",

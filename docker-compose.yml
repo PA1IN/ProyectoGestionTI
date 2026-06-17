@@ -21,6 +21,24 @@ services:
     depends_on:
       - db
 
+  gateway:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: gateway
+    env_file:
+      - ./Backend/.env
+    environment:
+      PORT_GATEWAY: 3000
+      PAGOS_SERVICE_URL: http://pagos:3001
+      CONCILIACION_SERVICE_URL: http://conciliacion:3002
+    ports:
+      - "3000:3000"
+    depends_on:
+      - pagos
+      - conciliacion
+
   conciliacion:
     build:
       context: ./Backend

@@ -1,7 +1,7 @@
 import axios from 'axios';
 import keycloak from '@/auth/keycloak';
 
-const api_url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002';
+const api_url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 const api = axios.create({
     baseURL: api_url,
