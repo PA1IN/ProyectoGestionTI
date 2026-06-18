@@ -1,10 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
-import { PagosModule } from './pagos.module';
+import { PagoModule } from './pago/pago.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(PagosModule);
+  const app = await NestFactory.create(PagoModule);
 
   app.enableCors();
 
@@ -19,4 +19,4 @@ async function bootstrap() {
   const port = configService.get<number>('PORT_PAGOS') || 3001;
   await app.listen(port);
 }
-bootstrap();
+bootstrap();  

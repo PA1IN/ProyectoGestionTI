@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -13,6 +14,8 @@ import { IS_PUBLIC_KEY } from './public.decorator';
 
 @Injectable()
 export class KeycloakAuthGuard implements CanActivate {
+  private readonly keycloakClientId = 'proyecto-4-frontend';
+
   constructor(
     private readonly reflector: Reflector,
     private readonly configService: ConfigService,
@@ -30,6 +33,7 @@ export class KeycloakAuthGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const authorization = request.headers?.authorization as string | undefined;
+    Logger.log(authorization);
 
     if (!authorization?.startsWith('Bearer ')) {
       throw new UnauthorizedException('Falta el token de autenticación de Keycloak');
@@ -64,7 +68,7 @@ export class KeycloakAuthGuard implements CanActivate {
   }
 
   private buildIssuer() {
-    const baseUrl = this.configService.get<string>('KEYCLOAK_URL') || 'http://localhost:8080';
+    const baseUrl = this.configService.get<string>('KEYCLOAK_URL') || 'http://localhost';
     const realm = this.configService.get<string>('KEYCLOAK_REALM') || 'sistema-centralizado';
 
     return `${baseUrl}/realms/${realm}`;
@@ -72,8 +76,9 @@ export class KeycloakAuthGuard implements CanActivate {
 
   private hasAdminRole(payload: Record<string, unknown>): boolean {
     const realmRoles = this.getArrayValue(payload, 'realm_access', 'roles');
+    const clientRoles = this.getArrayValue(payload, 'resource_access', this.keycloakClientId, 'roles');
 
-    return realmRoles.includes('admin');
+    return realmRoles.includes('admin') || clientRoles.includes('admin');
   }
 
   private getArrayValue(payload: Record<string, unknown>, ...path: string[]): string[] {

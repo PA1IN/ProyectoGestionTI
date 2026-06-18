@@ -9,12 +9,24 @@ import { DetalleTransaccion } from './entities/detalle-transaccion.entity';
 import { HistorialTransaccion } from './entities/historial-transaccion.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule as NestConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@libs/config';
 import type { StringValue } from 'ms';
 
 @Module({
   imports: [
+    ConfigModule,
     TarjetaModule,
     NestConfigModule,
+    TypeOrmModule.forRootAsync({
+      imports: [NestConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        url: configService.get<string>('DATABASE_URL'),
+        synchronize: configService.get<string>('NODE_ENV') !== 'production',
+        autoLoadEntities: true,
+      }),
+    }),
     JwtModule.registerAsync({
       imports: [NestConfigModule],
       inject: [ConfigService],
