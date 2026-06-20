@@ -16,7 +16,7 @@ import {
 export const Menulateral = () => {
     const pathname = usePathname();
     const router = useRouter();
-    const { logout } = useAuth();
+    const { logout, isAdmin } = useAuth();
 
     const handleLogout = () => {
         logout();
@@ -30,7 +30,11 @@ export const Menulateral = () => {
         { nombre: 'Alertas', ruta: '/dashboard/alertas', icono: BellRing},
         { nombre: 'Reportes', ruta: '/dashboard/reportes', icono: BarChart3},
         { nombre: 'Configuración', ruta: '/dashboard/configuracion', icono: Settings },
-    ];
+    ].filter(Boolean);
+
+    if (!isAdmin) {
+        return null;
+    }
 
     return(
         <aside className="w-64 bg-slate-900 text-white flex flex-col hidden md:flex">

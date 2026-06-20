@@ -1,13 +1,12 @@
-import { NestFactory } from '@nestjs/core';
-import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
-import { PagoModule } from './pago/pago.module';
+import { ConfigService } from '@nestjs/config';
+import { NestFactory } from '@nestjs/core';
+import { GatewayModule } from './gateway.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(PagoModule);
+  const app = await NestFactory.create(GatewayModule);
 
   app.enableCors();
-
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -15,8 +14,11 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
+
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT_PAGOS') || 3001;
+  const port = configService.get<number>('PORT_GATEWAY') || 3004;
+
   await app.listen(port);
 }
-bootstrap();  
+
+bootstrap();

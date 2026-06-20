@@ -1,46 +1,46 @@
 "use client";
 
-import React, { useState, useEffect, SyntheticEvent } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import api from '@/api/axios';
-import { ShieldAlert, Lock, Mail, Loader2, AlertCircle } from 'lucide-react';
+import { ShieldAlert, Loader2, AlertCircle, LogIn } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
-    const [ correo, setCorreo ] = useState('');
-    const [ passAcceso, setPassAcceso ] = useState('');
     const [ error, setError] = useState('');
-    const [ botonVisible, setBotonVisible] = useState(false);
-
-    const { setToken, setRolUsuario, token } = useAuth();
     const router = useRouter();
 
+    const { token, rolUsuario, loading, iniciarSesion, autenticado, isAdmin } = useAuth();
+
     useEffect(() => {
-        if (token) {
-            router.push('/dashboard');
+        if (token && autenticado && isAdmin) {
+            router.replace('/dashboard');
         }
-    }, [token, router]);
+    }, [token, autenticado, isAdmin, router]);
 
-    const enviar = async (e: SyntheticEvent ) => {
-        e.preventDefault();
+    const handleIngresar = async () => {
         setError('');
-        setBotonVisible(true);
-
         try {
-            const respuesta = await api.post('/auth/login', { email: correo, password: passAcceso });
-            const { accessToken, rol } = respuesta.data;
-
-            setToken(accessToken);
-            setRolUsuario(rol);
-
-            router.push('/dashboard');
-        } catch (err: any) {
-            console.error("Error en login:", err);
-            setError('credenciales incorrectas, porfavor verifique su correo y contraseña');
-        } finally {
-            setBotonVisible(false);
+            await iniciarSesion();
+        } catch (err) {
+            console.error('Error iniciando sesión con Keycloak:', err);
+            setError('No se pudo iniciar sesión con Keycloak');
         }
     };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-2xl p-8 flex flex-col items-center gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+                    <p className="text-sm text-slate-600">Verificando sesión...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (autenticado && isAdmin) {
+        return null;
+    }
 
     return (
         <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -61,60 +61,19 @@ export default function LoginPage() {
                         </div>
                     )}
 
-                    <form onSubmit={enviar} className="space-y-6">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">
-                                Correo Electronico
-                            </label>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <Mail className="h-5 w-5 text-gray-400"/>
-                                </div>
-                                <input
-                                    type="email"
-                                    required
-                                    value={correo}
-                                    onChange={(e) => setCorreo(e.target.value)}
-                                    placeholder="operador@payflow.cl"
-                                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-gray-900 placeholder-gray-400"
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">
-                                Contraseña
-                            </label>
-                            <div className="relative">
-                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <Lock className="h-5 w-5 text-gray-400"/>
-                                </div>
-                                <input
-                                    type="password"
-                                    required
-                                    value={passAcceso}
-                                    onChange={(e) => setPassAcceso(e.target.value)}
-                                    placeholder="********"
-                                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-gray-900 placeholder-gray-400"
-                                />
-                            </div>
-                        </div>
-
+                    <div className="space-y-6">
                         <button
-                            type="submit"
-                            disabled={botonVisible}
-                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-200 transition-all flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                            type="button"
+                            onClick={handleIngresar}
+                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-200 transition-all flex justify-center items-center gap-2"
                         >
-                            {botonVisible ? (
-                                <>
-                                    <Loader2 className="w-5 h-5 animate-spin"/>
-                                    Autenticando..
-                                </>
-                            ): (
-                                "Ingresar al panel"
-                            )}
+                            <LogIn className="w-5 h-5" />
+                            Ingresar con Keycloak
                         </button>
-                    </form>
+                        <p className="text-xs text-gray-500 text-center">
+                            Acceso exclusivo para usuarios con rol {rolUsuario ?? 'admin'}.
+                        </p>
+                    </div>
                 </div>
 
                 <div className="bg-gray-50 p-5 text-center border-t border-gray-100">

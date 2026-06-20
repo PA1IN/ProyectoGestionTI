@@ -65,7 +65,7 @@ export function useProcesarPago(tokenTransaccion: string) {
                 datosTarjeta,
                 {
                     headers: {
-                        Authorization: `Bearer ${tokenTransaccion}`,
+                        'X-Transaction-Token': tokenTransaccion,
                     },
                 },
             );
