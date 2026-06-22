@@ -1,16 +1,27 @@
 FROM node:20-alpine AS builder
-
 WORKDIR /app
-
-ARG APP_NAME
-
 COPY package*.json ./
-RUN npm install
-
+RUN npm ci
 COPY . .
 
+RUN npx nest build api-gateway && \
+    npx nest build pagos && \
+    npx nest build conciliacion && \
+    npx nest build analitica
 
-RUN npx nest build ${APP_NAME}
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
 
-ENV APP=$APP_NAME
-CMD node dist/apps/${APP}/main.js
+COPY package*.json ./
+
+RUN npm ci --only=production && npm install -g concurrently
+
+COPY --from=builder /app/dist ./dist
+
+CMD ["concurrently", \
+  "node dist/apps/api-gateway/main.js", \
+  "node dist/apps/pagos/main.js", \
+  "node dist/apps/conciliacion/main.js", \
+  "node dist/apps/analitica/main.js" \
+]

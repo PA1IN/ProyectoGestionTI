@@ -16,9 +16,11 @@ async function bootstrap() {
   );
 
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT_GATEWAY') || 3004;
+  
+  const port = process.env.PORT || configService.get<number>('PORT_GATEWAY') || 3004;
 
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
+  console.log(`API Gateway corriendo en el puerto: ${port}`);
 }
 
 bootstrap();
