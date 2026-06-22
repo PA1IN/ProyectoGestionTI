@@ -7,7 +7,6 @@ const api = axios.create({
     baseURL: api_url,
 });
 
-// Intercepta las solicitudes para agregar el token de autenticación
 api.interceptors.request.use(async (config) => {
     if (keycloak.authenticated) {
         await keycloak.updateToken(30);
