@@ -12,7 +12,7 @@ export default function Home() {
     setGenerandoCheckout(true);
 
     try {
-      const respuesta = await api.post('/pago/transaccion', {
+      const respuesta = await api.post('/pago/cit/init', {
         monto: 16000,
         moneda: 'CLP',
         nombreComercio: 'Proyecto Gestión TI',

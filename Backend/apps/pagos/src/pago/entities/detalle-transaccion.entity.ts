@@ -36,4 +36,7 @@ export class DetalleTransaccion {
 
   @Column({ name: 'emisor_tarjeta', nullable: true })
   emisorTarjeta!: string;
+
+  @Column({ name: 'payment_method_token', type: 'uuid', nullable: true })
+  paymentMethodToken!: string | null;
 }

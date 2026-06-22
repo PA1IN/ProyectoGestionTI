@@ -1,15 +1,32 @@
-import { Body, Controller, Get, Headers, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { PagoService } from './pago.service';
 import { CreateTransaccionDto } from './dto/create-transaccion.dto';
-import { ProcesarTransaccionDto } from './dto/procesar-transaccion.dto';
+import { PagoMerchantAuthGuard } from './guards/pago-merchant-auth.guard';
+import { MitDto } from './dto/mit.dto';
+import { CheckoutDto } from './dto/checkout.dto';
+import { TokenizarMitDto } from './dto/token-mit.dto';
 
-@Controller('pago')
+
+@Controller('ucnpay')
 export class PagoController {
   constructor(private readonly pagoService: PagoService) {}
 
-  @Post('transaccion')
-  createTransaction(@Body() createTransaccionDto: CreateTransaccionDto) {
-    return this.pagoService.createTransaction(createTransaccionDto);
+  @Post('init')
+  @UseGuards(PagoMerchantAuthGuard)
+  createTransaction(@Req() request: any, @Body() createTransaccionDto: CreateTransaccionDto) {
+    return this.pagoService.createTransaction(createTransaccionDto, request.merchantCredential.id);
+  }
+
+  @Post('init/suscription')
+  @UseGuards(PagoMerchantAuthGuard)
+  tokenizeMit(@Req() request: any, @Body() tokenizeMitDto: TokenizarMitDto) {
+    return this.pagoService.tokenizeMitCard(tokenizeMitDto, request.merchantCredential.id);
+  }
+
+  @Post('suscription/authorize')
+  @UseGuards(PagoMerchantAuthGuard)
+  processMit(@Req() request: any, @Body() processMitDto: MitDto) {
+    return this.pagoService.processMitPayment(processMitDto, request.merchantCredential.id);
   }
 
   @Get('checkout/:token')
@@ -17,16 +34,9 @@ export class PagoController {
     return this.pagoService.getCheckoutTransaccion(token);
   }
 
-  @Post('process')
-  processTransaction(
-    @Headers('authorization') authorization: string,
-    @Body() processTransactionDto: ProcesarTransaccionDto,
-  ) {
-    const token = authorization?.startsWith('Bearer ')
-      ? authorization.slice('Bearer '.length)
-      : authorization;
-
-    return this.pagoService.processTransaction(token, processTransactionDto);
+  @Post('checkout/:token/process')
+  async processCheckout(@Param('token') token: string, @Body() checkoutDto: CheckoutDto) {
+    return this.pagoService.processTransaction(token, checkoutDto);
   }
 
   @Get()

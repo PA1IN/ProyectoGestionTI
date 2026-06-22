@@ -1,8 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PagoService } from './pago.service';
 import { PagoController } from './pago.controller';
-import { TarjetaModule } from '../tarjeta/tarjeta.module';
-import { Tarjeta } from '../tarjeta/entities/tarjeta.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Transaccion } from './entities/transaccion.entity';
 import { DetalleTransaccion } from './entities/detalle-transaccion.entity';
@@ -11,11 +9,18 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule as NestConfigModule, ConfigService } from '@nestjs/config';
 import { ConfigModule } from '@libs/config';
 import type { StringValue } from 'ms';
+import { MediosPagoModule } from '../medios-pago/medios-pago.module';
+import { ComerciosModule } from '../comercios/comercios.module';
+import { TarjetaGuardada } from '../medios-pago/entities/tarjeta-guardada.entity';
+import { MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
+import { CredencialComercio } from '../comercios/entities/credencial-comercio.entity';
+import { PagoMerchantAuthGuard } from './guards/pago-merchant-auth.guard';
 
 @Module({
   imports: [
     ConfigModule,
-    TarjetaModule,
+    MediosPagoModule,
+    ComerciosModule,
     NestConfigModule,
     TypeOrmModule.forRootAsync({
       imports: [NestConfigModule],
@@ -44,9 +49,9 @@ import type { StringValue } from 'ms';
         };
       },
     }),
-    TypeOrmModule.forFeature([Tarjeta, Transaccion, DetalleTransaccion, HistorialTransaccion]),
+    TypeOrmModule.forFeature([TarjetaGuardada, MandatoPago, CredencialComercio, Transaccion, DetalleTransaccion, HistorialTransaccion]),
   ],
   controllers: [PagoController],
-  providers: [PagoService],
+  providers: [PagoService, PagoMerchantAuthGuard],
 })
 export class PagoModule {}

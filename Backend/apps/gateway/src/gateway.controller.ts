@@ -105,7 +105,7 @@ export class GatewayController {
     );
   }
 
-  @Post('pago/transaccion')
+  @Post('pago/cit/init')
   async createTransaccion(
     @Body() body: Record<string, unknown>,
     @Headers() headers: IncomingHttpHeaders,
@@ -115,7 +115,7 @@ export class GatewayController {
       response,
       this.gatewayService.forwardJsonRequest(
         this.gatewayService.pagosBaseUrl,
-        '/pago/transaccion',
+        '/pago/cit/init',
         'POST',
         body,
         headers,
@@ -221,29 +221,26 @@ export class GatewayController {
     );
   }
 
-  @Post('pago/process')
+  @Post('pago/checkout/:token/process')
   async processTransaction(
+    @Param('token') token: string,
     @Body() body: ProcessTransaccionBody,
-    @Headers('x-transaction-token') transactionToken: string,
     @Headers() headers: IncomingHttpHeaders,
     @Res({ passthrough: true }) response: Response,
   ) {
-    if (!transactionToken) {
-      throw new BadRequestException('Se requiere el header "x-transaction-token"');
+    if (!token) {
+      throw new BadRequestException('Se requiere el token de checkout');
     }
 
     return this.relay(
       response,
       this.gatewayService.forwardJsonRequest(
         this.gatewayService.pagosBaseUrl,
-        '/pago/process',
+        `/pago/checkout/${token}/process`,
         'POST',
         body,
         headers,
-        {
-          authorization: `Bearer ${transactionToken}`,
-        },
-        false,
+        //false,
       ),
     );
   }

@@ -5,66 +5,20 @@ import type { StringValue } from 'ms';
 import { CreateTransaccionDto } from './dto/create-transaccion.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Tarjeta } from '../tarjeta/entities/tarjeta.entity';
-import { EstadoTarjeta } from '../tarjeta/entities/tarjeta.entity';
-import { ProcesarTransaccionDto } from './dto/procesar-transaccion.dto';
+import { CheckoutDto } from './dto/checkout.dto';
+import { MitDto } from './dto/mit.dto';
+import { TokenizarMitDto } from './dto/token-mit.dto';
 import { EstadoRespuestaTransaccion } from './enums/estado-respuesta-transaccion.enum';
-import { EstadoTransaccionDb, Transaccion } from './entities/transaccion.entity';
+import { EstadoTransaccionDb, TipoOperacionTransaccionDb, Transaccion } from './entities/transaccion.entity';
 import { HistorialTransaccion } from './entities/historial-transaccion.entity';
 import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.entity';
-
-type TransactionPayload = {
-  transactionId: string;
-  monto: number;
-  moneda: string;
-  nombreComercio: string;
-  returnUrl: string;
-  tipo: 'transaccion-init';
-  iatAt: string;
-};
-
-type ProcessTransactionResult = {
-  status: EstadoRespuestaTransaccion;
-  message: string;
-  redirectUrl: string;
-  transactionId: string;
-  details?: {
-    monto: number;
-    moneda: string;
-    nombreComercio: string;
-  };
-};
-
-type CheckoutPayload = {
-  transactionId: string;
-  monto: number;
-  moneda: string;
-  nombreComercio: string;
-  returnUrl: string;
-  tipo: 'transaccion-init';
-  iatAt: string;
-};
-
-type CheckoutDetail = {
-  token: string;
-  comercio: string;
-  montoTotal: number;
-  estado: 'pendiente' | 'aprobada' | 'rechazada';
-  urlRetorno: string;
-  codigoQr: string;
-};
-
-const mapEstadoTarjetaToRespuesta = (estado: EstadoTarjeta): EstadoRespuestaTransaccion => {
-  switch (estado) {
-    case EstadoTarjeta.APROBADO:
-      return EstadoRespuestaTransaccion.APROBADO;
-    case EstadoTarjeta.PENDIENTE:
-      return EstadoRespuestaTransaccion.PENDIENTE;
-    case EstadoTarjeta.RECHAZADO:
-    default:
-      return EstadoRespuestaTransaccion.RECHAZADO;
-  }
-};
+import { MediosPagoService } from '../medios-pago/medios-pago.service';
+import { ComerciosService } from '../comercios/comercios.service';
+import { TarjetaGuardada } from '../medios-pago/entities/tarjeta-guardada.entity';
+import { MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
+import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/entities/credencial-comercio.entity';
+import { CheckoutDetail, MitPaymentResult, PaymentCardSummary, ProcessTransactionResult, TokenizeMitResult } from './types/pago-response.types';
+import { CheckoutPayload, TransactionPayload } from './types/pago-jwt-payload.types';
 
 const mapEstadoApiToDb = (estado: EstadoRespuestaTransaccion): EstadoTransaccionDb => {
   switch (estado) {
@@ -83,8 +37,14 @@ export class PagoService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    @InjectRepository(Tarjeta)
-    private readonly tarjetaService: Repository<Tarjeta>,
+    private readonly mediosPagoService: MediosPagoService,
+    private readonly comerciosService: ComerciosService,
+    @InjectRepository(TarjetaGuardada)
+    private readonly tarjetaGuardadaRepository: Repository<TarjetaGuardada>,
+    @InjectRepository(MandatoPago)
+    private readonly mandatoRepository: Repository<MandatoPago>,
+    @InjectRepository(CredencialComercio)
+    private readonly credencialComercioRepository: Repository<CredencialComercio>,
     @InjectRepository(Transaccion)
     private readonly transaccionRepository: Repository<Transaccion>,
     @InjectRepository(HistorialTransaccion)
@@ -93,7 +53,128 @@ export class PagoService {
     private readonly detalleRepository: Repository<DetalleTransaccion>,
   ) {}
 
-  async createTransaction(createTransaccionDto: CreateTransaccionDto) {
+  async tokenizeMitCard(dto: TokenizarMitDto, merchantCredentialId: string): Promise<TokenizeMitResult> {
+    const merchantCredential = await this.resolveMerchantCredential(merchantCredentialId);
+    const cardRecord = await this.mediosPagoService.guardarTarjeta(dto.card, dto.titular ?? dto.holderName);
+
+    const mandato = await this.mediosPagoService.crearMandato({
+      merchantCredentialId: merchantCredential.id,
+      paymentMethodToken: cardRecord.id,
+      currency: 'CLP',
+    });
+
+    return {
+      status: EstadoRespuestaTransaccion.APROBADO,
+      message: 'Tarjeta tokenizada correctamente',
+      paymentMethodToken: cardRecord.id,
+      mandateId: mandato.id,
+      card: {
+        paymentMethodToken: cardRecord.id,
+        brand: cardRecord.brand,
+        last4: cardRecord.last4,
+        expMonth: cardRecord.expMonth,
+        expYear: cardRecord.expYear,
+        holderName: cardRecord.holderName,
+      },
+    };
+  }
+
+  async processMitPayment(dto: MitDto, merchantCredentialId: string): Promise<MitPaymentResult> {
+    const merchantCredential = await this.resolveMerchantCredential(merchantCredentialId);
+    const cardRecord = await this.mediosPagoService.buscarTarjetaPorToken(dto.paymentMethodToken);
+
+    if (!cardRecord) {
+      return {
+        status: EstadoRespuestaTransaccion.RECHAZADO,
+        message: 'Medio de pago no encontrado',
+        transactionId: 'unknown',
+        paymentMethodToken: dto.paymentMethodToken,
+        mandateId: null,
+        card: {
+          brand: null,
+          last4: '0000',
+          expMonth: 0,
+          expYear: 0,
+        },
+        customer: dto.customer,
+      };
+    }
+
+    const mandato = await this.mediosPagoService.buscarMandatoPorTarjetaYComercio(dto.paymentMethodToken, merchantCredential.id);
+
+    if (!mandato) {
+      return {
+        status: EstadoRespuestaTransaccion.RECHAZADO,
+        message: 'No existe un mandato activo para este comercio',
+        transactionId: 'unknown',
+        paymentMethodToken: dto.paymentMethodToken,
+        mandateId: null,
+        card: {
+          brand: cardRecord.brand,
+          last4: cardRecord.last4,
+          expMonth: cardRecord.expMonth,
+          expYear: cardRecord.expYear,
+        },
+        customer: dto.customer,
+      };
+    }
+
+    const transaccion = await this.transaccionRepository.save(
+      this.transaccionRepository.create({
+        monto: dto.monto.toFixed(2),
+        moneda: dto.moneda.toUpperCase(),
+        estado: EstadoTransaccionDb.PENDING,
+        idOrden: `ORD-${Date.now()}`,
+        tipoOperacion: TipoOperacionTransaccionDb.MIT,
+        merchantCredentialId: merchantCredential.id,
+        paymentMethodToken: dto.paymentMethodToken,
+        mandateId: mandato.id,
+      }),
+    );
+
+    transaccion.estado = EstadoTransaccionDb.SUCCESS;
+    transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
+    await this.transaccionRepository.save(transaccion);
+
+    await this.detalleRepository.save(
+      this.detalleRepository.create({
+        transaccion,
+        nombreUsuario: dto.customer ?? 'MIT',
+        rut: '',
+        tipoPago: TipoPagoDb.TARJETA,
+        ultimosCuatro: cardRecord.last4,
+        cuotas: 1,
+        codigoAutorizacion: `auth_${Math.random().toString(36).slice(2, 8)}`,
+        emisorTarjeta: cardRecord.brand ?? 'UNKNOWN',
+        paymentMethodToken: dto.paymentMethodToken,
+      }),
+    );
+
+    await this.historialRepository.save(
+      this.historialRepository.create({
+        transaccion,
+        statusFrom: EstadoTransaccionDb.PENDING,
+        statusTo: EstadoTransaccionDb.SUCCESS,
+      }),
+    );
+
+    return {
+      status: EstadoRespuestaTransaccion.APROBADO,
+      message: 'MIT procesado correctamente',
+      transactionId: transaccion.id,
+      paymentMethodToken: dto.paymentMethodToken,
+      mandateId: mandato.id,
+      card: {
+        brand: cardRecord.brand,
+        last4: cardRecord.last4,
+        expMonth: cardRecord.expMonth,
+        expYear: cardRecord.expYear,
+      },
+      customer: dto.customer,
+    };
+  }
+
+  async createTransaction(createTransaccionDto: CreateTransaccionDto, merchantCredentialId?: string) {
     const expiresInRaw = this.configService.get<string>('JWT_EXPIRES_IN') || '15m';
     const expiresIn = /^\d+$/.test(expiresInRaw)
       ? Number(expiresInRaw)
@@ -106,6 +187,8 @@ export class PagoService {
         moneda: createTransaccionDto.moneda,
         estado: EstadoTransaccionDb.PENDING,
         idOrden: `ORD-${Date.now()}`,
+        tipoOperacion: TipoOperacionTransaccionDb.CIT,
+        merchantCredentialId: merchantCredentialId,
       }),
     );
 
@@ -162,7 +245,7 @@ export class PagoService {
     }
   }
 
-  async processTransaction(token: string, procesarTransaccionDto: ProcesarTransaccionDto): Promise<ProcessTransactionResult> {
+  async processTransaction(token: string, checkoutDto: CheckoutDto, merchantCredentialId?: string): Promise<ProcessTransactionResult> {
     try {
       const payload = await this.jwtService.verifyAsync<TransactionPayload>(token, {
         secret: this.configService.get<string>('JWT_SECRET'),
@@ -178,28 +261,37 @@ export class PagoService {
         };
       }
 
-      const card = await this.tarjetaService.findOne({ where: { numero: procesarTransaccionDto.numeroTarjeta } });
-      const cardIsValid = Boolean(card && card.cvv === procesarTransaccionDto.cvv && card.fechaExpiracion === procesarTransaccionDto.fechaExpiracion);
-      const status = cardIsValid && card ? mapEstadoTarjetaToRespuesta(card.estado) : EstadoRespuestaTransaccion.RECHAZADO;
+      const merchantIdToUse = merchantCredentialId ?? transaccion.merchantCredentialId;
+      if (!merchantIdToUse) {
+        throw new UnauthorizedException('No se recibió credencial del comercio');
+      }
+      const merchantCredential = await this.resolveMerchantCredential(merchantIdToUse);
+
+      const status = EstadoRespuestaTransaccion.APROBADO;
       const previousStatus = transaccion.estado;
+      const last4 = checkoutDto.numeroTarjeta.slice(-4);
+      const brand = this.detectarMarcaTarjeta(checkoutDto.numeroTarjeta);
 
       await this.detalleRepository.save(
         this.detalleRepository.create({
           transaccion,
-          nombreUsuario: procesarTransaccionDto.titular,
-          rut: procesarTransaccionDto.rut ?? '',
+          nombreUsuario: checkoutDto.titular ?? 'ANONIMO',
+          rut: '',
           tipoPago: TipoPagoDb.TARJETA,
-          ultimosCuatro: procesarTransaccionDto.numeroTarjeta.slice(-4),
+          ultimosCuatro: last4,
           cuotas: status === EstadoRespuestaTransaccion.APROBADO ? 1 : 0,
-          ...(status === EstadoRespuestaTransaccion.APROBADO
-            ? { codigoAutorizacion: `auth_${Math.random().toString(36).slice(2, 8)}` }
-            : {}),
-          emisorTarjeta: card ? 'TARJETA_SIMULADA' : 'TARJETA_NO_ENCONTRADA',
+          codigoAutorizacion: `auth_${Math.random().toString(36).slice(2, 8)}`,
+          emisorTarjeta: brand,
+          paymentMethodToken: null,
         }),
       );
 
       transaccion.estado = mapEstadoApiToDb(status);
       transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
+      transaccion.tipoOperacion = TipoOperacionTransaccionDb.CIT;
+      transaccion.paymentMethodToken = null;
+      transaccion.mandateId = null;
+      transaccion.merchantCredentialId = merchantCredential.id;
       await this.transaccionRepository.save(transaccion);
 
       await this.historialRepository.save(
@@ -215,15 +307,7 @@ export class PagoService {
 
       return {
         status,
-        message: !card
-          ? 'Tarjeta no encontrada'
-          : !cardIsValid
-            ? 'Datos de tarjeta inválidos'
-            : isApproved
-          ? 'Transacción aprobada'
-          : status === EstadoRespuestaTransaccion.PENDIENTE
-            ? 'Transacción pendiente de confirmación'
-            : 'Transacción rechazada',
+        message: isApproved ? 'Transacción aprobada' : 'Transacción rechazada',
         redirectUrl: `${payload.returnUrl}?status=${status}&transactionId=${transactionId}`,
         transactionId,
         details: {
@@ -234,14 +318,47 @@ export class PagoService {
       };
     } catch (error) {
       Logger.error('Error al procesar la transacción', error);
-        return {
-          status: EstadoRespuestaTransaccion.RECHAZADO,
-          message: 'Token inválido o expirado',
-          transactionId: 'unknown',
-          redirectUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'}?status=RECHAZADO&transactionId=unknown`,
-        };
-      }
+      return {
+        status: EstadoRespuestaTransaccion.RECHAZADO,
+        message: 'Token inválido o expirado',
+        transactionId: 'unknown',
+        redirectUrl: `${this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000'}?status=RECHAZADO&transactionId=unknown`,
+      };
+    }
   }
+
+  private async resolveMerchantCredential(merchantCredentialId?: string) {
+    if (!merchantCredentialId) {
+      throw new UnauthorizedException('No se recibió credencial del comercio');
+    }
+
+    const merchantCredential = await this.credencialComercioRepository.findOne({
+      where: { id: merchantCredentialId, estado: EstadoCredencialComercioDb.ACTIVA },
+    });
+
+    if (!merchantCredential) {
+      throw new UnauthorizedException('No hay comercio autorizado disponible');
+    }
+
+    return merchantCredential;
+  }
+
+  private detectarMarcaTarjeta(numeroPan: string) {
+    if (/^4/.test(numeroPan)) {
+      return 'VISA';
+    }
+
+    if (/^5[1-5]/.test(numeroPan)) {
+      return 'MASTERCARD';
+    }
+
+    if (/^3[47]/.test(numeroPan)) {
+      return 'AMEX';
+    }
+
+    return 'UNKNOWN';
+  }
+
   async getDetalleTransaccion(id: number) {
     const detalle = await this.detalleRepository.findOne({
       where: { id },
@@ -259,6 +376,7 @@ export class PagoService {
       cuotas: detalle.cuotas,
       codigoAutorizacion: detalle.codigoAutorizacion,
       emisorTarjeta: detalle.emisorTarjeta,
+      paymentMethodToken: detalle.paymentMethodToken,
     };
   }
   async getHistorialTransaccion(id: string) {
@@ -289,12 +407,4 @@ export class PagoService {
     return historiales;
   }
   
-
-  findAll() {
-    return `This action returns all pago`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} pago`;
-  }
 }

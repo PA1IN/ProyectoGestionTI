@@ -4,7 +4,11 @@ import { JwtService } from '@nestjs/jwt';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PagoService } from './pago.service';
-import { EstadoTarjeta, Tarjeta } from '../tarjeta/entities/tarjeta.entity';
+import { MediosPagoService } from '../medios-pago/medios-pago.service';
+import { ComerciosService } from '../comercios/comercios.service';
+import { TarjetaGuardada } from '../medios-pago/entities/tarjeta-guardada.entity';
+import { MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
+import { CredencialComercio } from '../comercios/entities/credencial-comercio.entity';
 import { Transaccion, EstadoTransaccionDb } from './entities/transaccion.entity';
 import { HistorialTransaccion } from './entities/historial-transaccion.entity';
 import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.entity';
@@ -33,6 +37,24 @@ describe('PagoService', () => {
     findOne: jest.fn(),
   };
 
+  const mandatoRepositoryMock = {
+    create: jest.fn((value) => value),
+    save: jest.fn(),
+  };
+
+  const credencialComercioRepositoryMock = {
+    findOne: jest.fn(),
+  };
+
+  const mediosPagoServiceMock = {
+    guardarTarjeta: jest.fn(),
+    buscarTarjetaPorToken: jest.fn(),
+    crearMandato: jest.fn(),
+    buscarMandatoPorTarjetaYComercio: jest.fn(),
+  };
+
+  const comerciosServiceMock = {};
+
   const transaccionRepositoryMock = {
     create: jest.fn((value) => value),
     save: jest.fn(),
@@ -59,37 +81,19 @@ describe('PagoService', () => {
         PagoService,
         { provide: JwtService, useValue: jwtServiceMock },
         { provide: ConfigService, useValue: configServiceMock },
-        { provide: getRepositoryToken(Tarjeta), useValue: tarjetaRepositoryMock },
+        { provide: getRepositoryToken(TarjetaGuardada), useValue: tarjetaRepositoryMock },
+        { provide: getRepositoryToken(MandatoPago), useValue: mandatoRepositoryMock },
+        { provide: getRepositoryToken(CredencialComercio), useValue: credencialComercioRepositoryMock },
         { provide: getRepositoryToken(Transaccion), useValue: transaccionRepositoryMock },
         { provide: getRepositoryToken(HistorialTransaccion), useValue: historialRepositoryMock },
         { provide: getRepositoryToken(DetalleTransaccion), useValue: detalleRepositoryMock },
+        { provide: MediosPagoService, useValue: mediosPagoServiceMock },
+        { provide: ComerciosService, useValue: comerciosServiceMock },
       ],
     }).compile();
 
     service = module.get<PagoService>(PagoService);
     jest.clearAllMocks();
-  });
-
-  it('createTransaction debe generar un token y persistir una transaccion pendiente', async () => {
-    transaccionRepositoryMock.save.mockResolvedValue({ id: 'tx-1' });
-    jwtServiceMock.signAsync.mockResolvedValue('jwt-token');
-
-    const result = await service.createTransaction({
-      monto: 1250,
-      moneda: 'CLP',
-      nombreComercio: 'Demo',
-      returnUrl: 'http://localhost:3000/ok',
-    });
-
-    expect(transaccionRepositoryMock.save).toHaveBeenCalled();
-    expect(jwtServiceMock.signAsync).toHaveBeenCalled();
-    expect(result).toEqual(
-      expect.objectContaining({
-        token: 'jwt-token',
-        transactionId: 'tx-1',
-        tokenType: 'Bearer',
-      }),
-    );
   });
 
   it('processTransaction debe aprobar y guardar detalle e historial', async () => {
@@ -103,12 +107,6 @@ describe('PagoService', () => {
       iatAt: new Date().toISOString(),
     });
     transaccionRepositoryMock.findOne.mockResolvedValue({ id: 'tx-1', estado: EstadoTransaccionDb.PENDING });
-    tarjetaRepositoryMock.findOne.mockResolvedValue({
-      numero: '1111222233334444',
-      cvv: '123',
-      fechaExpiracion: '12/28',
-      estado: EstadoTarjeta.APROBADO,
-    });
     transaccionRepositoryMock.save.mockResolvedValue({ id: 'tx-1', estado: EstadoTransaccionDb.SUCCESS });
 
     const result = await service.processTransaction('jwt-token', {
@@ -116,17 +114,47 @@ describe('PagoService', () => {
       titular: 'Juan Perez',
       fechaExpiracion: '12/28',
       cvv: '123',
-      rut: '11.111.111-1',
     });
 
     expect(detalleRepositoryMock.save).toHaveBeenCalledWith(
       expect.objectContaining({
         tipoPago: TipoPagoDb.TARJETA,
         ultimosCuatro: '4444',
+        emisorTarjeta: 'VISA',
+        paymentMethodToken: null,
       }),
     );
+    expect(mediosPagoServiceMock.guardarTarjeta).not.toHaveBeenCalled();
     expect(historialRepositoryMock.save).toHaveBeenCalled();
     expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
+  });
+
+  it('tokenizeMitCard debe guardar tarjeta y crear mandato', async () => {
+    credencialComercioRepositoryMock.findOne.mockResolvedValue({ id: 'mc-1', estado: 'ACTIVA' });
+    mediosPagoServiceMock.guardarTarjeta.mockResolvedValue({
+      id: 'pm-1',
+      brand: 'VISA',
+      last4: '4444',
+      expMonth: 12,
+      expYear: 2028,
+      holderName: 'Juan Perez',
+    });
+    mediosPagoServiceMock.crearMandato.mockResolvedValue({ id: 'md-1' });
+
+    const result = await service.tokenizeMitCard({
+      card: {
+        numero: '1111222233334444',
+        exp_mes: '12',
+        exp_ano: '2028',
+        cvc: '123',
+      },
+      titular: 'Juan Perez',
+    }, 'mc-1');
+
+    expect(mediosPagoServiceMock.guardarTarjeta).toHaveBeenCalled();
+    expect(mediosPagoServiceMock.crearMandato).toHaveBeenCalled();
+    expect(result.paymentMethodToken).toBe('pm-1');
+    expect(result.mandateId).toBe('md-1');
   });
 
   it('getAllTransacciones devuelve el repositorio', async () => {

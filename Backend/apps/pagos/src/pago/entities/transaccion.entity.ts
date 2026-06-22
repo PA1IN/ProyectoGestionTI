@@ -12,6 +12,11 @@ export enum EstadoTransaccionDb {
   REFUNDED = 'REFUNDED',
 }
 
+export enum TipoOperacionTransaccionDb {
+  CIT = 'CIT',
+  MIT = 'MIT',
+}
+
 @Entity({ name: 'transaccion' })
 export class Transaccion {
   @PrimaryGeneratedColumn('uuid')
@@ -19,6 +24,18 @@ export class Transaccion {
 
   @Column({ name: 'id_orden' })
   idOrden!: string;
+
+  @Column({ name: 'merchant_credential_id', type: 'uuid', nullable: true })
+  merchantCredentialId!: string | null;
+
+  @Column({ name: 'payment_method_token', type: 'uuid', nullable: true })
+  paymentMethodToken!: string | null;
+
+  @Column({ name: 'mandate_id', type: 'uuid', nullable: true })
+  mandateId!: string | null;
+
+  @Column({ name: 'tipo_operacion', type: 'enum', enum: TipoOperacionTransaccionDb, enumName: 'tipo_operacion_transaccion', nullable: true })
+  tipoOperacion!: TipoOperacionTransaccionDb | null;
 
   @Column({ type: 'decimal', precision: 18, scale: 2 })
   monto!: string;

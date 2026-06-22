@@ -6,6 +6,22 @@ CREATE TYPE tipo_pago AS ENUM (
   'TARJETA', 'BILLETERA', 'TRANSFERENCIA'
 );
 
+CREATE TYPE tipo_operacion_transaccion AS ENUM (
+  'CIT', 'MIT'
+);
+
+CREATE TYPE estado_tarjeta_guardada AS ENUM (
+  'ACTIVA', 'INACTIVA', 'ELIMINADA'
+);
+
+CREATE TYPE estado_mandato_pago AS ENUM (
+  'ACTIVO', 'SUSPENDIDO', 'REVOCADO'
+);
+
+CREATE TYPE estado_credencial_comercio AS ENUM (
+  'ACTIVA', 'INACTIVA'
+);
+
 CREATE TYPE discrepancia_tipo AS ENUM (
   'EXISTE_EN_BANCO',
   'FALTANTE_EN_BANCO',
@@ -20,6 +36,10 @@ CREATE TYPE discrepancia_estado AS ENUM (
 CREATE TABLE transaccion (
   id          UUID               DEFAULT gen_random_uuid(),
   id_orden    VARCHAR(255)       NOT NULL,
+  merchant_credential_id UUID,
+  payment_method_token UUID,
+  mandate_id  UUID,
+  tipo_operacion tipo_operacion_transaccion,
   rrn         INT,
   monto       INT    NOT NULL,
   moneda      CHAR(3)            DEFAULT 'CLP',
@@ -42,9 +62,66 @@ CREATE TABLE detalle_transaccion (
   cuotas              INT       DEFAULT 1,
   codigo_autorizacion VARCHAR(100),
   emisor_tarjeta      VARCHAR(100),
+  payment_method_token UUID,
   CONSTRAINT fk_detalle_transaccion 
     FOREIGN KEY (id_transaccion) REFERENCES transaccion(id) ON DELETE CASCADE
 );
+
+CREATE TABLE tarjeta_guardada (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  numero_pan       VARCHAR(19) NOT NULL,
+  exp_month        INT NOT NULL,
+  exp_year         INT NOT NULL,
+  last4            VARCHAR(4) NOT NULL,
+  brand            VARCHAR(30),
+  holder_name      VARCHAR(120),
+  fingerprint      VARCHAR(128),
+  estado           estado_tarjeta_guardada DEFAULT 'ACTIVA',
+  created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE credencial_comercio (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre_comercio  VARCHAR(150) NOT NULL,
+  public_key       VARCHAR(128) NOT NULL UNIQUE,
+  private_key      VARCHAR(128) NOT NULL UNIQUE,
+  estado           estado_credencial_comercio DEFAULT 'ACTIVA',
+  created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE mandato_pago (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  merchant_credential_id UUID NOT NULL,
+  payment_method_token   UUID NOT NULL,
+  initial_transaction_id UUID,
+  currency              CHAR(3) DEFAULT 'CLP',
+  recurrence_type       VARCHAR(50),
+  amount_limit          NUMERIC(18,2),
+  estado                estado_mandato_pago DEFAULT 'ACTIVO',
+  consent_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_mandato_merchant
+    FOREIGN KEY (merchant_credential_id) REFERENCES credencial_comercio(id),
+  CONSTRAINT fk_mandato_tarjeta
+    FOREIGN KEY (payment_method_token) REFERENCES tarjeta_guardada(id),
+  CONSTRAINT fk_mandato_transaccion
+    FOREIGN KEY (initial_transaction_id) REFERENCES transaccion(id)
+);
+
+ALTER TABLE transaccion
+  ADD CONSTRAINT fk_transaccion_merchant
+  FOREIGN KEY (merchant_credential_id) REFERENCES credencial_comercio(id),
+  ADD CONSTRAINT fk_transaccion_tarjeta
+  FOREIGN KEY (payment_method_token) REFERENCES tarjeta_guardada(id),
+  ADD CONSTRAINT fk_transaccion_mandato
+  FOREIGN KEY (mandate_id) REFERENCES mandato_pago(id);
+
+ALTER TABLE detalle_transaccion
+  ADD CONSTRAINT fk_detalle_tarjeta
+  FOREIGN KEY (payment_method_token) REFERENCES tarjeta_guardada(id);
 
 CREATE TABLE historial_transaccion (
   id              BIGSERIAL PRIMARY KEY,

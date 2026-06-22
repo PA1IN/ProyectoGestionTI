@@ -61,13 +61,8 @@ export function useProcesarPago(tokenTransaccion: string) {
     return useMutation({
         mutationFn: async (datosTarjeta: DatosPagoTarjeta) => {
             const respuesta = await api.post(
-                '/pago/process',
+                `/pago/checkout/${tokenTransaccion}/process`,
                 datosTarjeta,
-                {
-                    headers: {
-                        'X-Transaction-Token': tokenTransaccion,
-                    },
-                },
             );
 
             return respuesta.data as {
