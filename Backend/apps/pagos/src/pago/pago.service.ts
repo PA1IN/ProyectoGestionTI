@@ -38,11 +38,7 @@ export class PagoService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly mediosPagoService: MediosPagoService,
-    private readonly comerciosService: ComerciosService,
-    @InjectRepository(TarjetaGuardada)
-    private readonly tarjetaGuardadaRepository: Repository<TarjetaGuardada>,
-    @InjectRepository(MandatoPago)
-    private readonly mandatoRepository: Repository<MandatoPago>,
+
     @InjectRepository(CredencialComercio)
     private readonly credencialComercioRepository: Repository<CredencialComercio>,
     @InjectRepository(Transaccion)
