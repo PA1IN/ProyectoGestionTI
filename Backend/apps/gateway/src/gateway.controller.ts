@@ -36,7 +36,7 @@ interface PatchDiscrepanciaBody {
   estado?: string;
 }
 
-@Controller()
+@Controller('api')
 export class GatewayController {
   constructor(private readonly gatewayService: GatewayService) {}
 
@@ -105,7 +105,7 @@ export class GatewayController {
     );
   }
 
-  @Post('pago/cit/init')
+  @Post('ucnpay/init')
   async createTransaccion(
     @Body() body: Record<string, unknown>,
     @Headers() headers: IncomingHttpHeaders,
@@ -115,7 +115,7 @@ export class GatewayController {
       response,
       this.gatewayService.forwardJsonRequest(
         this.gatewayService.pagosBaseUrl,
-        '/pago/cit/init',
+        '/ucnpay/init',
         'POST',
         body,
         headers,
@@ -123,87 +123,7 @@ export class GatewayController {
     );
   }
 
-  @Get('pago')
-  async getPagos(@Headers() headers: IncomingHttpHeaders, @Res({ passthrough: true }) response: Response) {
-    return this.relay(
-      response,
-      this.gatewayService.forwardJsonRequest(this.gatewayService.pagosBaseUrl, '/pago', 'GET', undefined, headers),
-    );
-  }
-
-  @Get('pago/transacciones')
-  async getTransacciones(@Headers() headers: IncomingHttpHeaders, @Res({ passthrough: true }) response: Response) {
-    return this.relay(
-      response,
-      this.gatewayService.forwardJsonRequest(
-        this.gatewayService.pagosBaseUrl,
-        '/pago/transacciones',
-        'GET',
-        undefined,
-        headers,
-      ),
-    );
-  }
-
-  @Get('pago/detalles')
-  async getDetalles(@Headers() headers: IncomingHttpHeaders, @Res({ passthrough: true }) response: Response) {
-    return this.relay(
-      response,
-      this.gatewayService.forwardJsonRequest(this.gatewayService.pagosBaseUrl, '/pago/detalles', 'GET', undefined, headers),
-    );
-  }
-
-  @Get('pago/historiales')
-  async getHistoriales(@Headers() headers: IncomingHttpHeaders, @Res({ passthrough: true }) response: Response) {
-    return this.relay(
-      response,
-      this.gatewayService.forwardJsonRequest(
-        this.gatewayService.pagosBaseUrl,
-        '/pago/historiales',
-        'GET',
-        undefined,
-        headers,
-      ),
-    );
-  }
-
-  @Get('pago/detalle/:id')
-  async getDetalleTransaccion(
-    @Param('id') id: string,
-    @Headers() headers: IncomingHttpHeaders,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    return this.relay(
-      response,
-      this.gatewayService.forwardJsonRequest(
-        this.gatewayService.pagosBaseUrl,
-        `/pago/detalle/${id}`,
-        'GET',
-        undefined,
-        headers,
-      ),
-    );
-  }
-
-  @Get('pago/historial/:id')
-  async getHistorialTransaccion(
-    @Param('id') id: string,
-    @Headers() headers: IncomingHttpHeaders,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    return this.relay(
-      response,
-      this.gatewayService.forwardJsonRequest(
-        this.gatewayService.pagosBaseUrl,
-        `/pago/historial/${id}`,
-        'GET',
-        undefined,
-        headers,
-      ),
-    );
-  }
-
-  @Get('pago/checkout/:token')
+  @Get('ucnpay/checkout/:token')
   async getCheckoutTransaccion(
     @Param('token') token: string,
     @Headers() headers: IncomingHttpHeaders,
@@ -213,7 +133,7 @@ export class GatewayController {
       response,
       this.gatewayService.forwardJsonRequest(
         this.gatewayService.pagosBaseUrl,
-        `/pago/checkout/${token}`,
+        `/ucnpay/checkout/${token}`,
         'GET',
         undefined,
         headers,
@@ -221,7 +141,7 @@ export class GatewayController {
     );
   }
 
-  @Post('pago/checkout/:token/process')
+  @Post('ucnpay/checkout/:token/process')
   async processTransaction(
     @Param('token') token: string,
     @Body() body: ProcessTransaccionBody,
@@ -236,11 +156,10 @@ export class GatewayController {
       response,
       this.gatewayService.forwardJsonRequest(
         this.gatewayService.pagosBaseUrl,
-        `/pago/checkout/${token}/process`,
+        `/ucnpay/checkout/${token}/process`,
         'POST',
         body,
         headers,
-        //false,
       ),
     );
   }
