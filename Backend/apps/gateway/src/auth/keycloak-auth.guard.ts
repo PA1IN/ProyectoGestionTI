@@ -33,7 +33,6 @@ export class KeycloakAuthGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const authorization = request.headers?.authorization as string | undefined;
-    Logger.log(authorization);
 
     if (!authorization?.startsWith('Bearer ')) {
       throw new UnauthorizedException('Falta el token de autenticación de Keycloak');
