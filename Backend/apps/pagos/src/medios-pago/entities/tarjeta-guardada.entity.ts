@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 export enum EstadoTarjetaGuardadaDb {
   ACTIVA = 'ACTIVA',
@@ -11,7 +11,8 @@ export class TarjetaGuardada {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ name: 'numero_pan', type: 'varchar', length: 19 })
+  @Index({ unique: true })
+  @Column({ name: 'numero_pan', type: 'varchar', length: 19, unique: true })
   numeroPan!: string;
 
   @Column({ name: 'exp_month', type: 'int' })

@@ -24,6 +24,12 @@ export class MediosPagoService {
 
   async guardarTarjeta(card: CardInput, holderName?: string) {
     const numeroPan = card.numero;
+    const tarjetaExistente = await this.tarjetaGuardadaRepository.findOne({ where: { numeroPan } });
+
+    if (tarjetaExistente) {
+      return tarjetaExistente;
+    }
+
     const tarjeta = this.tarjetaGuardadaRepository.create({
       numeroPan,
       expMonth: Number(card.exp_mes),

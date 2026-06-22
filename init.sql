@@ -69,7 +69,7 @@ CREATE TABLE detalle_transaccion (
 
 CREATE TABLE tarjeta_guardada (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  numero_pan       VARCHAR(19) NOT NULL,
+  numero_pan       VARCHAR(19) NOT NULL UNIQUE,
   exp_month        INT NOT NULL,
   exp_year         INT NOT NULL,
   last4            VARCHAR(4) NOT NULL,
@@ -83,7 +83,7 @@ CREATE TABLE tarjeta_guardada (
 
 CREATE TABLE credencial_comercio (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  nombre_comercio  VARCHAR(150) NOT NULL,
+  nombre_comercio  VARCHAR(150) NOT NULL UNIQUE,
   public_key       VARCHAR(128) NOT NULL UNIQUE,
   private_key      VARCHAR(128) NOT NULL UNIQUE,
   estado           estado_credencial_comercio DEFAULT 'ACTIVA',

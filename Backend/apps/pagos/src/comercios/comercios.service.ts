@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
 import { Repository } from 'typeorm';
@@ -27,11 +27,20 @@ export class ComerciosService {
   }
 
   async create(createComercioDto: CreateComercioDto) {
+    const nombreComercio = createComercioDto.nombreComercio.trim();
+    const existing = await this.credencialComercioRepository.findOne({
+      where: { nombreComercio },
+    });
+
+    if (existing) {
+      throw new ConflictException('Ya existe un comercio con ese nombre');
+    }
+
     const publicKey = `pk_${randomUUID().replace(/-/g, '')}`;
     const privateKey = `sk_${randomUUID().replace(/-/g, '')}`;
 
     const comercio = this.credencialComercioRepository.create({
-      nombreComercio: createComercioDto.nombreComercio,
+      nombreComercio,
       publicKey,
       privateKey,
       estado: createComercioDto.estado ?? EstadoCredencialComercioDb.ACTIVA,

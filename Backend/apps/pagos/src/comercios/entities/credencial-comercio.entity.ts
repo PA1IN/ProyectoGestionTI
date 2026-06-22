@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 export enum EstadoCredencialComercioDb {
   ACTIVA = 'ACTIVA',
@@ -10,7 +10,8 @@ export class CredencialComercio {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ name: 'nombre_comercio', type: 'varchar', length: 150 })
+  @Index({ unique: true })
+  @Column({ name: 'nombre_comercio', type: 'varchar', length: 150, unique: true })
   nombreComercio!: string;
 
   @Column({ name: 'public_key', type: 'varchar', length: 128, unique: true })
