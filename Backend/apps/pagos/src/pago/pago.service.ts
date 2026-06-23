@@ -211,6 +211,7 @@ export class PagoService {
     };
   }
   async createTransaction(createTransaccionDto: CreateTransaccionDto, merchantCredentialId?: string): Promise<CreateTransactionResult> {
+    const merchantCredential = await this.resolveMerchantCredential(merchantCredentialId);
     const expiresInRaw = this.configService.get<string>('JWT_EXPIRES_IN') || '15m';
     const expiresIn = /^\d+$/.test(expiresInRaw)
       ? Number(expiresInRaw)
@@ -225,7 +226,7 @@ export class PagoService {
       if (
         existingTransaction.monto !== createTransaccionDto.monto.toFixed(2) ||
         existingTransaction.moneda !== createTransaccionDto.moneda ||
-        existingTransaction.merchantCredentialId !== merchantCredentialId
+        existingTransaction.merchantCredentialId !== merchantCredential.id
       ) {
         throw new ConflictException('El id de orden ya fue utilizado con otra solicitud');
       }
@@ -235,7 +236,7 @@ export class PagoService {
         idOrden: existingTransaction.idOrden,
         monto: createTransaccionDto.monto,
         moneda: createTransaccionDto.moneda,
-        nombreComercio: createTransaccionDto.nombreComercio,
+        nombreComercio: merchantCredential.nombreComercio,
         returnUrl: createTransaccionDto.returnUrl,
         iatAt: new Date().toISOString(),
       };
@@ -258,7 +259,7 @@ export class PagoService {
         estado: EstadoTransaccionDb.PENDIENTE,
         idOrden: createTransaccionDto.idOrden,
         tipoOperacion: TipoOperacionTransaccionDb.CIT,
-        merchantCredentialId: merchantCredentialId,
+        merchantCredentialId: merchantCredential.id,
       }),
     );
 
@@ -267,7 +268,7 @@ export class PagoService {
       idOrden: transaccion.idOrden,
       monto: createTransaccionDto.monto,
       moneda: createTransaccionDto.moneda,
-      nombreComercio: createTransaccionDto.nombreComercio,
+      nombreComercio: merchantCredential.nombreComercio,
       returnUrl: createTransaccionDto.returnUrl,
       iatAt: new Date().toISOString(),
     };
@@ -294,21 +295,32 @@ export class PagoService {
         where: { id: payload.transactionId },
       });
 
-      const estado = !transaccion
-        ? 'pendiente'
-        : transaccion.estado === EstadoTransaccionDb.APROBADO
-          ? 'aprobada'
-          : transaccion.estado === EstadoTransaccionDb.RECHAZADO || transaccion.estado === EstadoTransaccionDb.FALLIDO
-            ? 'rechazada'
-            : 'pendiente';
+      const merchantCredential = transaccion?.merchantCredentialId
+        ? await this.resolveMerchantCredential(transaccion.merchantCredentialId)
+        : null;
+
+      let estado: EstadoRespuestaTransaccion = EstadoRespuestaTransaccion.PENDIENTE;
+
+      if (transaccion) {
+        if (
+          transaccion.estado === EstadoTransaccionDb.RECHAZADO || 
+          transaccion.estado === EstadoTransaccionDb.FALLIDO
+        ) {
+          estado = EstadoRespuestaTransaccion.RECHAZADO;
+        } else if (transaccion.estado === EstadoTransaccionDb.APROBADO) {
+          estado = EstadoRespuestaTransaccion.APROBADO;
+        } else {
+          estado = EstadoRespuestaTransaccion.PENDIENTE;
+        }
+      }
 
       return {
         token,
-        comercio: payload.nombreComercio,
+        comercio: merchantCredential?.nombreComercio ?? payload.nombreComercio,
         montoTotal: payload.monto,
         estado,
         urlRetorno: payload.returnUrl,
-        codigoQr: `bancoapp://pay?transactionId=${payload.transactionId}&amount=${payload.monto}&currency=${payload.moneda}`,
+        //codigoQr: `bancoapp://pay?transactionId=${payload.transactionId}&amount=${payload.monto}&currency=${payload.moneda}`,
       };
     } catch {
       throw new UnauthorizedException('Token inválido o expirado');

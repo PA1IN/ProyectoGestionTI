@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpStatus,
@@ -68,6 +69,7 @@ export class GatewayController {
   }
 
   @Post('tarjeta')
+  @Public()
   async createTarjeta(
     @Body() body: Record<string, unknown>,
     @Headers() headers: IncomingHttpHeaders,
@@ -80,6 +82,7 @@ export class GatewayController {
   }
 
   @Get('tarjeta')
+  @Public()
   async getTarjetas(@Headers() headers: IncomingHttpHeaders, @Res({ passthrough: true }) response: Response) {
     return this.relay(
       response,
@@ -88,6 +91,7 @@ export class GatewayController {
   }
 
   @Get('tarjeta/:id')
+  @Public()
   async getTarjetaById(
     @Param('id') id: string,
     @Headers() headers: IncomingHttpHeaders,
@@ -106,6 +110,7 @@ export class GatewayController {
   }
 
   @Post('ucnpay/init')
+  @Public()
   async createTransaccion(
     @Body() body: Record<string, unknown>,
     @Headers() headers: IncomingHttpHeaders,
@@ -124,6 +129,7 @@ export class GatewayController {
   }
 
   @Get('ucnpay/checkout/:token')
+  @Public()
   async getCheckoutTransaccion(
     @Param('token') token: string,
     @Headers() headers: IncomingHttpHeaders,
@@ -142,6 +148,7 @@ export class GatewayController {
   }
 
   @Post('ucnpay/checkout/:token/process')
+  @Public()
   async processTransaction(
     @Param('token') token: string,
     @Body() body: ProcessTransaccionBody,
@@ -158,6 +165,44 @@ export class GatewayController {
         this.gatewayService.pagosBaseUrl,
         `/ucnpay/checkout/${token}/process`,
         'POST',
+        body,
+        headers,
+      ),
+    );
+  }
+
+  @Post('ucnpay/init/suscription')
+  @Public()
+  async tokenizeMit(
+    @Body() body: Record<string, unknown>,
+    @Headers() headers: IncomingHttpHeaders,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.relay(
+      response,
+      this.gatewayService.forwardJsonRequest(
+        this.gatewayService.pagosBaseUrl,
+        '/ucnpay/init/suscription',
+        'POST',
+        body,
+        headers,
+      ),
+    );
+  }
+
+  @Delete('ucnpay/tarjeta')
+  @Public()
+  async eliminarTarjeta(
+    @Body() body: Record<string, unknown>,
+    @Headers() headers: IncomingHttpHeaders,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.relay(
+      response,
+      this.gatewayService.forwardJsonRequest(
+        this.gatewayService.pagosBaseUrl,
+        '/ucnpay/tarjeta',
+        'DELETE',
         body,
         headers,
       ),

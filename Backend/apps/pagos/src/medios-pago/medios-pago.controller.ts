@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { MediosPagoService } from './medios-pago.service';
 import { TokenizarMitDto } from './dto/token-mit.dto';
 import { DeleteTarjetaGuardadaDto } from './dto/delete-tarjeta-guardada.dto';
@@ -15,7 +15,14 @@ export class MediosPagoController {
   }
 
   @Delete('tarjeta')
+  @UseGuards(PagoMerchantAuthGuard)
   eliminarTarjeta(@Body() deleteTarjetaDto: DeleteTarjetaGuardadaDto) {
     return this.mediosPagoService.eliminarTarjetaGuardada(deleteTarjetaDto.userId, deleteTarjetaDto.token);
+  }
+
+  @Get('tarjeta/:userId')
+  @UseGuards(PagoMerchantAuthGuard)
+  getAll(@Param('userId') userId: string) {
+    return this.mediosPagoService.findByUserId(userId);
   }
 }

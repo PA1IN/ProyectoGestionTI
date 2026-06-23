@@ -35,9 +35,9 @@ export type CheckoutDetail = {
   token: string;
   comercio: string;
   montoTotal: number;
-  estado: 'pendiente' | 'aprobada' | 'rechazada';
+  estado: EstadoRespuestaTransaccion;
   urlRetorno: string;
-  codigoQr: string;
+  //codigoQr: string;
 };
 
 export type ProcessTransactionResult = TransactionResponseBase & {

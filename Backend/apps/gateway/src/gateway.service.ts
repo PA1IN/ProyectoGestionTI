@@ -83,6 +83,8 @@ export class GatewayService {
     const forwardedHeaders: Record<string, string> = { ...(extraHeaders ?? {}) };
     const authorization = forwardAuthorization ? this.getHeaderValue(headers, 'authorization') : undefined;
     const transactionToken = this.getHeaderValue(headers, 'x-transaction-token');
+    const publicKey = this.getHeaderValue(headers, 'x-public-key');
+    const privateKey = this.getHeaderValue(headers, 'x-private-key');
     const cookie = this.getHeaderValue(headers, 'cookie');
 
     if (authorization) {
@@ -91,6 +93,14 @@ export class GatewayService {
 
     if (transactionToken) {
       forwardedHeaders['x-transaction-token'] = transactionToken;
+    }
+
+    if (publicKey) {
+      forwardedHeaders['x-public-key'] = publicKey;
+    }
+
+    if (privateKey) {
+      forwardedHeaders['x-private-key'] = privateKey;
     }
 
     if (cookie) {

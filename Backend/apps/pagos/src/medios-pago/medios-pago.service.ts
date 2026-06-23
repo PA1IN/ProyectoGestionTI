@@ -23,7 +23,6 @@ export interface TokenizeMitResult {
   paymentMethodToken: string;
   mandateId: string;
   card: {
-    paymentMethodToken: string;
     brand: string | null;
     last4: string;
     expMonth: number;
@@ -79,6 +78,23 @@ export class MediosPagoService {
 
   async buscarTarjetaPorToken(token: string) {
     return this.tarjetaGuardadaRepository.findOne({ where: { id: token } });
+  }
+
+  async findByUserId(userId: string) {
+    return this.tarjetaGuardadaRepository.find({
+      where: {
+        userId,
+        estado: EstadoTarjetaGuardadaDb.ACTIVA,
+      },
+      select: {
+        id: true,
+        last4: true,
+        brand: true,
+        expMonth: true,
+        expYear: true,
+        holderName: true,
+      }
+    });
   }
 
   async crearMandato(data: {
@@ -144,11 +160,10 @@ export class MediosPagoService {
 
     return {
       status: EstadoRespuestaTransaccion.APROBADO,
-      message: 'Tarjeta tokenizada correctamente',
+      message: 'Tarjeta guardada correctamente',
       paymentMethodToken: cardRecord.id,
       mandateId: mandato.id,
       card: {
-        paymentMethodToken: cardRecord.id,
         brand: cardRecord.brand,
         last4: cardRecord.last4,
         expMonth: cardRecord.expMonth,
