@@ -56,7 +56,7 @@ Respuesta:
 Consulta el detalle de checkout de una transaccion.
 
 Headers:
-- opcionalmente se pueden reenviar headers del gateway
+- Opcional
 
 Respuesta:
 ```json
