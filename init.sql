@@ -91,6 +91,7 @@ CREATE TABLE detalle_transaccion (
 
 CREATE TABLE tarjeta_guardada (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id          UUID NOT NULL,
   numero_pan       VARCHAR(19) NOT NULL,
   exp_month        INT NOT NULL,
   exp_year         INT NOT NULL,
@@ -103,7 +104,7 @@ CREATE TABLE tarjeta_guardada (
   updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE UNIQUE INDEX "UQ_tarjeta_activa" ON tarjeta_guardada (numero_pan) WHERE estado = 'ACTIVA';
+CREATE UNIQUE INDEX "UQ_tarjeta_activa" ON tarjeta_guardada (user_id, numero_pan) WHERE estado = 'ACTIVA';
 
 CREATE TABLE credencial_comercio (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),

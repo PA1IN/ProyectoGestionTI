@@ -7,17 +7,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CheckoutDto } from './dto/checkout.dto';
 import { MitDto } from './dto/mit.dto';
-import { TokenizarMitDto } from './dto/token-mit.dto';
 import { EstadoRespuestaTransaccion } from './enums/estado-respuesta-transaccion.enum';
 import { EstadoTransaccionDb, TipoOperacionTransaccionDb, Transaccion } from './entities/transaccion.entity';
 import { HistorialTransaccion } from './entities/historial-transaccion.entity';
 import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.entity';
 import { MediosPagoService } from '../medios-pago/medios-pago.service';
 import { TarjetaService } from '../tarjeta/tarjeta.service';
-import { TarjetaGuardada } from '../medios-pago/entities/tarjeta-guardada.entity';
-import { MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
 import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/entities/credencial-comercio.entity';
-import { CheckoutDetail, CreateTransactionResult, MitPaymentResult, PaymentCardSummary, ProcessTransactionResult, TokenizeMitResult } from './types/pago-response.types';
+import { CheckoutDetail, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult } from './types/pago-response.types';
 import { CheckoutPayload, TransactionPayload } from './types/pago-jwt-payload.types';
 import { BancoEstadoOperacion } from '../tarjeta/types/banco.types';
 
@@ -38,32 +35,6 @@ export class PagoService {
     @InjectRepository(DetalleTransaccion)
     private readonly detalleRepository: Repository<DetalleTransaccion>,
   ) {}
-
-  async tokenizeMitCard(dto: TokenizarMitDto, merchantCredentialId: string): Promise<TokenizeMitResult> {
-    const merchantCredential = await this.resolveMerchantCredential(merchantCredentialId);
-    const cardRecord = await this.mediosPagoService.guardarTarjeta(dto.card, dto.titular ?? dto.holderName);
-
-    const mandato = await this.mediosPagoService.crearMandato({
-      merchantCredentialId: merchantCredential.id,
-      paymentMethodToken: cardRecord.id,
-      currency: 'CLP',
-    });
-
-    return {
-      status: EstadoRespuestaTransaccion.APROBADO,
-      message: 'Tarjeta tokenizada correctamente',
-      paymentMethodToken: cardRecord.id,
-      mandateId: mandato.id,
-      card: {
-        paymentMethodToken: cardRecord.id,
-        brand: cardRecord.brand,
-        last4: cardRecord.last4,
-        expMonth: cardRecord.expMonth,
-        expYear: cardRecord.expYear,
-        holderName: cardRecord.holderName,
-      },
-    };
-  }
 
   async processMitPayment(dto: MitDto, merchantCredentialId: string): Promise<MitPaymentResult> {
     const merchantCredential = await this.resolveMerchantCredential(merchantCredentialId);
@@ -266,7 +237,6 @@ export class PagoService {
         moneda: createTransaccionDto.moneda,
         nombreComercio: createTransaccionDto.nombreComercio,
         returnUrl: createTransaccionDto.returnUrl,
-        tipo: 'transaccion-init',
         iatAt: new Date().toISOString(),
       };
 
@@ -299,7 +269,6 @@ export class PagoService {
       moneda: createTransaccionDto.moneda,
       nombreComercio: createTransaccionDto.nombreComercio,
       returnUrl: createTransaccionDto.returnUrl,
-      tipo: 'transaccion-init',
       iatAt: new Date().toISOString(),
     };
 

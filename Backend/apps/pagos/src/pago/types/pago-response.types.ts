@@ -45,14 +45,6 @@ export type ProcessTransactionResult = TransactionResponseBase & {
   details?: TransactionDetails;
 };
 
-export type TokenizeMitResult = {
-  status: EstadoRespuestaTransaccion;
-  message: string;
-  paymentMethodToken: string;
-  mandateId: string;
-  card: PaymentCardSummary;
-};
-
 export type MitPaymentResult = TransactionResponseBase & {
   paymentMethodToken: string;
   mandateId: string | null;

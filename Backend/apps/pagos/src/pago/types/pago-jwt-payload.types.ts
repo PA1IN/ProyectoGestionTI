@@ -5,7 +5,6 @@ export type TransactionPayload = {
   moneda: string;
   nombreComercio: string;
   returnUrl: string;
-  tipo: 'transaccion-init';
   iatAt: string;
 };
 
@@ -16,6 +15,5 @@ export type CheckoutPayload = {
   moneda: string;
   nombreComercio: string;
   returnUrl: string;
-  tipo: 'transaccion-init';
   iatAt: string;
 };

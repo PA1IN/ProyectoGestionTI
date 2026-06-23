@@ -63,6 +63,7 @@ describe('PagoController', () => {
     expect(pagoServiceMock.processTransaction).toHaveBeenCalledWith('token', payload);
   });
 
+  //mover este spec a medios-pago, ahi se tokeniza
   it('debe llamar al servicio al tokenizar una tarjeta mit', async () => {
     const payload = {
       idOrden: 'ORD-3',

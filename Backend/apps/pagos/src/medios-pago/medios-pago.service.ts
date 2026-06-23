@@ -1,17 +1,41 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
 import { Repository } from 'typeorm';
 import { MandatoPago, EstadoMandatoPagoDb } from './entities/mandato-pago.entity';
 import { EstadoTarjetaGuardadaDb, TarjetaGuardada } from './entities/tarjeta-guardada.entity';
+import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/entities/credencial-comercio.entity';
+import { TokenizarMitDto } from './dto/token-mit.dto';
+import { EstadoRespuestaTransaccion } from '../pago/enums/estado-respuesta-transaccion.enum';
 
 export type CardInput = {
+  userId: string;
   numero: string;
   exp_mes: number | string;
   exp_ano: number | string;
   cvc: string;
   holder_name?: string;
 };
+
+export interface TokenizeMitResult {
+  status: EstadoRespuestaTransaccion;
+  message: string;
+  paymentMethodToken: string;
+  mandateId: string;
+  card: {
+    paymentMethodToken: string;
+    brand: string | null;
+    last4: string;
+    expMonth: number;
+    expYear: number;
+    holderName: string | null;
+  };
+}
+
+export interface ResponseBase {
+  status: EstadoRespuestaTransaccion;
+  message: string;
+}
 
 @Injectable()
 export class MediosPagoService {
@@ -20,17 +44,26 @@ export class MediosPagoService {
     private readonly tarjetaGuardadaRepository: Repository<TarjetaGuardada>,
     @InjectRepository(MandatoPago)
     private readonly mandatoPagoRepository: Repository<MandatoPago>,
+    @InjectRepository(CredencialComercio)
+    private readonly credencialComercioRepository: Repository<CredencialComercio>,
   ) {}
 
   async guardarTarjeta(card: CardInput, holderName?: string) {
     const numeroPan = card.numero;
-    const tarjetaExistente = await this.tarjetaGuardadaRepository.findOne({ where: { numeroPan } });
+    const tarjetaExistente = await this.tarjetaGuardadaRepository.findOne({
+      where: {
+        userId: card.userId,
+        numeroPan,
+        estado: EstadoTarjetaGuardadaDb.ACTIVA,
+      },
+    });
 
     if (tarjetaExistente) {
-      return tarjetaExistente;
+      throw new ConflictException('La tarjeta ya está guardada para este usuario');
     }
 
     const tarjeta = this.tarjetaGuardadaRepository.create({
+      userId: card.userId,
       numeroPan,
       expMonth: Number(card.exp_mes),
       expYear: Number(card.exp_ano),
@@ -97,5 +130,68 @@ export class MediosPagoService {
 
   private generarFingerprint(numeroPan: string, expMonth: number | string, expYear: number | string) {
     return createHash('sha256').update(`${numeroPan}:${expMonth}:${expYear}`).digest('hex');
+  }
+
+  async tokenizeMitCard(dto: TokenizarMitDto, merchantCredentialId: string): Promise<TokenizeMitResult> {
+    const merchantCredential = await this.resolveMerchantCredential(merchantCredentialId);
+    const cardRecord = await this.guardarTarjeta({ ...dto.tarjeta, userId: dto.userId }, dto.titular);
+
+    const mandato = await this.crearMandato({
+      merchantCredentialId: merchantCredential.id,
+      paymentMethodToken: cardRecord.id,
+      currency: 'CLP',
+    });
+
+    return {
+      status: EstadoRespuestaTransaccion.APROBADO,
+      message: 'Tarjeta tokenizada correctamente',
+      paymentMethodToken: cardRecord.id,
+      mandateId: mandato.id,
+      card: {
+        paymentMethodToken: cardRecord.id,
+        brand: cardRecord.brand,
+        last4: cardRecord.last4,
+        expMonth: cardRecord.expMonth,
+        expYear: cardRecord.expYear,
+        holderName: cardRecord.holderName,
+      },
+    };
+  }
+
+  private async resolveMerchantCredential(merchantCredentialId?: string) {
+    if (!merchantCredentialId) {
+      throw new UnauthorizedException('No se recibió credencial del comercio');
+    }
+
+    const merchantCredential = await this.credencialComercioRepository.findOne({
+      where: { id: merchantCredentialId, estado: EstadoCredencialComercioDb.ACTIVA },
+    });
+
+    if (!merchantCredential) {
+      throw new UnauthorizedException('No hay comercio autorizado disponible');
+    }
+
+    return merchantCredential;
+  }
+
+  async eliminarTarjetaGuardada(userId: string, tarjetaId: string): Promise<ResponseBase> {
+    const tarjeta = await this.tarjetaGuardadaRepository.findOne({
+      where: {
+        id: tarjetaId,
+        userId,
+        estado: EstadoTarjetaGuardadaDb.ACTIVA,
+      },
+    });
+
+    if (!tarjeta) {
+      throw new NotFoundException('Tarjeta guardada no encontrada');
+    }
+
+    tarjeta.estado = EstadoTarjetaGuardadaDb.ELIMINADA;
+    await this.tarjetaGuardadaRepository.save(tarjeta);
+    return {
+      status: EstadoRespuestaTransaccion.APROBADO,
+      message: 'Tarjeta eliminada correctamente',
+    };
   }
 }

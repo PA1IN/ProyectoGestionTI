@@ -29,13 +29,13 @@ export class TokenizarMitDto {
   @IsNotEmpty({ message: 'La tarjeta es requerida' })
   @ValidateNested()
   @Type(() => CardPaymentDto)
-  card!: CardPaymentDto;
+  tarjeta!: CardPaymentDto;
+
+  @IsNotEmpty({ message: 'El usuario es requerido' })
+  @IsString({ message: 'El usuario debe ser un string' })
+  userId!: string;
 
   @IsOptional()
   @IsString({ message: 'El titular debe ser un string' })
   titular?: string;
-
-  @IsOptional()
-  @IsString({ message: 'El nombre del titular debe ser un string' })
-  holderName?: string;
 }

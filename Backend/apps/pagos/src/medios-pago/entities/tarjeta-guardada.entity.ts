@@ -2,15 +2,17 @@ import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn, Update
 
 export enum EstadoTarjetaGuardadaDb {
   ACTIVA = 'ACTIVA',
-  INACTIVA = 'INACTIVA',
   ELIMINADA = 'ELIMINADA',
 }
 
-@Index('UQ_tarjeta_activa', ['numeroPan'], { unique: true, where: `"estado" = 'ACTIVA'` })
+@Index('UQ_tarjeta_activa', ['userId', 'numeroPan'], { unique: true, where: `"estado" = 'ACTIVA'` })
 @Entity({ name: 'tarjeta_guardada' })
 export class TarjetaGuardada {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  @Column({ name: 'user_id', type: 'uuid' })
+  userId!: string;
 
   @Column({ name: 'numero_pan', type: 'varchar', length: 19})
   numeroPan!: string;

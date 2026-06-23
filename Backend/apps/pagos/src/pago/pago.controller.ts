@@ -4,7 +4,6 @@ import { CreateTransaccionDto } from './dto/create-transaccion.dto';
 import { PagoMerchantAuthGuard } from './guards/pago-merchant-auth.guard';
 import { MitDto } from './dto/mit.dto';
 import { CheckoutDto } from './dto/checkout.dto';
-import { TokenizarMitDto } from './dto/token-mit.dto';
 
 
 @Controller('ucnpay')
@@ -15,12 +14,6 @@ export class PagoController {
   @UseGuards(PagoMerchantAuthGuard)
   createTransaction(@Req() request: any, @Body() createTransaccionDto: CreateTransaccionDto) {
     return this.pagoService.createTransaction(createTransaccionDto, request.merchantCredential.id);
-  }
-
-  @Post('init/suscription')
-  @UseGuards(PagoMerchantAuthGuard)
-  tokenizeMit(@Req() request: any, @Body() tokenizeMitDto: TokenizarMitDto) {
-    return this.pagoService.tokenizeMitCard(tokenizeMitDto, request.merchantCredential.id);
   }
 
   @Post('suscription/authorize')
