@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param } from '@nestjs/common';
 import { TarjetaService } from './tarjeta.service';
 import { CreateTarjetaDto } from './dto/create-tarjeta.dto';
+import { AutorizarTarjetaBancoDto } from './dto/autorizar-tarjeta-banco.dto';
 
 
 @Controller('tarjeta')
@@ -10,6 +11,11 @@ export class TarjetaController {
   @Post()
   create(@Body() createTarjetaDto: CreateTarjetaDto) {
     return this.tarjetaService.create(createTarjetaDto);
+  }
+
+  @Post('banco/autorizar')
+  autorizarBanco(@Body() autorizarTarjetaBancoDto: AutorizarTarjetaBancoDto) {
+    return this.tarjetaService.autorizarBanco(autorizarTarjetaBancoDto);
   }
 
   @Get()

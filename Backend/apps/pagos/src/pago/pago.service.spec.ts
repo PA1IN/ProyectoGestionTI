@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import { PagoService } from './pago.service';
 import { MediosPagoService } from '../medios-pago/medios-pago.service';
 import { ComerciosService } from '../comercios/comercios.service';
+import { TarjetaService } from '../tarjeta/tarjeta.service';
 import { TarjetaGuardada } from '../medios-pago/entities/tarjeta-guardada.entity';
 import { MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
 import { CredencialComercio } from '../comercios/entities/credencial-comercio.entity';
@@ -53,6 +54,10 @@ describe('PagoService', () => {
     buscarMandatoPorTarjetaYComercio: jest.fn(),
   };
 
+  const tarjetaServiceMock = {
+    autorizarBanco: jest.fn(),
+  };
+
   const comerciosServiceMock = {};
 
   const transaccionRepositoryMock = {
@@ -88,6 +93,7 @@ describe('PagoService', () => {
         { provide: getRepositoryToken(HistorialTransaccion), useValue: historialRepositoryMock },
         { provide: getRepositoryToken(DetalleTransaccion), useValue: detalleRepositoryMock },
         { provide: MediosPagoService, useValue: mediosPagoServiceMock },
+        { provide: TarjetaService, useValue: tarjetaServiceMock },
         { provide: ComerciosService, useValue: comerciosServiceMock },
       ],
     }).compile();
@@ -107,6 +113,20 @@ describe('PagoService', () => {
       iatAt: new Date().toISOString(),
     });
     transaccionRepositoryMock.findOne.mockResolvedValue({ id: 'tx-1', estado: EstadoTransaccionDb.PENDING });
+    tarjetaServiceMock.autorizarBanco.mockResolvedValue({
+      estado: 'APROBADA',
+      message: 'Pago aprobado por saldo suficiente',
+      montoSolicitado: 1250,
+      saldoDisponible: 50000,
+      tarjeta: {
+        id: 1,
+        numeroMask: '1111****4444',
+        titular: 'Juan Perez',
+        fechaExpiracion: '12/28',
+        dinero: 48750,
+        estado: null,
+      },
+    });
     transaccionRepositoryMock.save.mockResolvedValue({ id: 'tx-1', estado: EstadoTransaccionDb.SUCCESS });
 
     const result = await service.processTransaction('jwt-token', {
@@ -124,6 +144,7 @@ describe('PagoService', () => {
         paymentMethodToken: null,
       }),
     );
+    expect(tarjetaServiceMock.autorizarBanco).toHaveBeenCalled();
     expect(mediosPagoServiceMock.guardarTarjeta).not.toHaveBeenCalled();
     expect(historialRepositoryMock.save).toHaveBeenCalled();
     expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);

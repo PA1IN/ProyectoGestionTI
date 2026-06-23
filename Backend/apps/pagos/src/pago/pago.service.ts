@@ -13,12 +13,13 @@ import { EstadoTransaccionDb, TipoOperacionTransaccionDb, Transaccion } from './
 import { HistorialTransaccion } from './entities/historial-transaccion.entity';
 import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.entity';
 import { MediosPagoService } from '../medios-pago/medios-pago.service';
-import { ComerciosService } from '../comercios/comercios.service';
+import { TarjetaService } from '../tarjeta/tarjeta.service';
 import { TarjetaGuardada } from '../medios-pago/entities/tarjeta-guardada.entity';
 import { MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
 import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/entities/credencial-comercio.entity';
 import { CheckoutDetail, MitPaymentResult, PaymentCardSummary, ProcessTransactionResult, TokenizeMitResult } from './types/pago-response.types';
 import { CheckoutPayload, TransactionPayload } from './types/pago-jwt-payload.types';
+import { BancoEstadoOperacion } from '../tarjeta/types/banco.types';
 
 const mapEstadoApiToDb = (estado: EstadoRespuestaTransaccion): EstadoTransaccionDb => {
   switch (estado) {
@@ -38,6 +39,7 @@ export class PagoService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly mediosPagoService: MediosPagoService,
+    private readonly tarjetaService: TarjetaService,
 
     @InjectRepository(CredencialComercio)
     private readonly credencialComercioRepository: Repository<CredencialComercio>,
@@ -102,6 +104,30 @@ export class PagoService {
       return {
         status: EstadoRespuestaTransaccion.RECHAZADO,
         message: 'No existe un mandato activo para este comercio',
+        transactionId: 'unknown',
+        paymentMethodToken: dto.paymentMethodToken,
+        mandateId: null,
+        card: {
+          brand: cardRecord.brand,
+          last4: cardRecord.last4,
+          expMonth: cardRecord.expMonth,
+          expYear: cardRecord.expYear,
+        },
+        customer: dto.customer,
+      };
+    }
+
+    const bancoRespuesta = await this.tarjetaService.autorizarBanco({
+      numero: cardRecord.numeroPan,
+      titular: cardRecord.holderName ?? dto.customer ?? 'ANONIMO',
+      fechaExpiracion: `${String(cardRecord.expMonth).padStart(2, '0')}/${String(cardRecord.expYear).slice(-2)}`,
+      monto: dto.monto,
+    });
+
+    if (bancoRespuesta.estado === BancoEstadoOperacion.RECHAZADA) {
+      return {
+        status: EstadoRespuestaTransaccion.RECHAZADO,
+        message: bancoRespuesta.message,
         transactionId: 'unknown',
         paymentMethodToken: dto.paymentMethodToken,
         mandateId: null,
@@ -262,9 +288,43 @@ export class PagoService {
         throw new UnauthorizedException('No se recibió credencial del comercio');
       }
       const merchantCredential = await this.resolveMerchantCredential(merchantIdToUse);
+      const previousStatus = transaccion.estado;
+
+      const bancoRespuesta = await this.tarjetaService.autorizarBanco({
+        numero: checkoutDto.numeroTarjeta,
+        titular: checkoutDto.titular ?? 'ANONIMO',
+        fechaExpiracion: checkoutDto.fechaExpiracion,
+        cvv: checkoutDto.cvv,
+        monto: payload.monto,
+      });
+
+      if (bancoRespuesta.estado === BancoEstadoOperacion.RECHAZADA) {
+        transaccion.estado = EstadoTransaccionDb.REJECTED;
+        transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
+        await this.transaccionRepository.save(transaccion);
+
+        await this.historialRepository.save(
+          this.historialRepository.create({
+            transaccion,
+            statusFrom: previousStatus,
+            statusTo: EstadoTransaccionDb.REJECTED,
+          }),
+        );
+
+        return {
+          status: EstadoRespuestaTransaccion.RECHAZADO,
+          message: bancoRespuesta.message,
+          redirectUrl: `${payload.returnUrl}?status=RECHAZADO&transactionId=${transaccion.id}`,
+          transactionId: transaccion.id,
+          details: {
+            monto: payload.monto,
+            moneda: payload.moneda,
+            nombreComercio: payload.nombreComercio,
+          },
+        };
+      }
 
       const status = EstadoRespuestaTransaccion.APROBADO;
-      const previousStatus = transaccion.estado;
       const last4 = checkoutDto.numeroTarjeta.slice(-4);
       const brand = this.detectarMarcaTarjeta(checkoutDto.numeroTarjeta);
 

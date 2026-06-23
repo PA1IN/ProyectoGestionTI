@@ -22,6 +22,10 @@ CREATE TYPE estado_credencial_comercio AS ENUM (
   'ACTIVA', 'INACTIVA'
 );
 
+CREATE TYPE estado_tarjeta AS ENUM (
+  'APROBADO', 'RECHAZADO'
+);
+
 CREATE TYPE discrepancia_tipo AS ENUM (
   'EXISTE_EN_BANCO',
   'FALTANTE_EN_BANCO',
@@ -48,6 +52,24 @@ CREATE TABLE transaccion (
   updated_at  TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id)
 );
+
+CREATE TABLE tarjeta (
+  id               SERIAL PRIMARY KEY,
+  numero           VARCHAR(16) NOT NULL UNIQUE,
+  titular          VARCHAR(100) NOT NULL,
+  fecha_expiracion VARCHAR(7)   NOT NULL,
+  cvv              VARCHAR(4)   NOT NULL,
+  dinero           INT,
+  estado           estado_tarjeta,
+  created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO tarjeta (numero, titular, fecha_expiracion, cvv, dinero, estado)
+VALUES
+  ('1111222233334444', 'TITULAR APROBADO', '01/27', '123', 100000, 'APROBADO'),
+  ('4444333322221111', 'TITULAR RECHAZADO', '01/27', '123', 100000, 'RECHAZADO')
+ON CONFLICT (numero) DO NOTHING;
 
 --CREATE INDEX idx_transaccion_id_orden ON transaccion (id_orden);
 --CREATE INDEX idx_transaccion_rrn_fecha ON transaccion (rrn);

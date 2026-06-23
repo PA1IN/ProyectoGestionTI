@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, Length, Matches, IsEnum, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, Length, Matches, IsEnum, IsOptional, IsInt, Min } from 'class-validator';
 import { EstadoTarjeta } from '../entities/tarjeta.entity';
 
 export class CreateTarjetaDto {
@@ -25,6 +25,11 @@ export class CreateTarjetaDto {
   cvv: string;
 
   @IsOptional()
-  @IsEnum(EstadoTarjeta, { message: 'El estado debe ser APROBADO, RECHAZADO o PENDIENTE' })
+  @IsEnum(EstadoTarjeta, { message: 'El estado debe ser APROBADO o RECHAZADO' })
   estado?: EstadoTarjeta;
+
+  @IsOptional()
+  @IsInt({ message: 'El dinero debe ser un entero' })
+  @Min(0, { message: 'El dinero debe ser mayor o igual a 0' })
+  dinero?: number;
 }

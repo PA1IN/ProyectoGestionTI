@@ -11,6 +11,7 @@ import { ConfigModule } from '@libs/config';
 import type { StringValue } from 'ms';
 import { MediosPagoModule } from '../medios-pago/medios-pago.module';
 import { ComerciosModule } from '../comercios/comercios.module';
+import { TarjetaModule } from '../tarjeta/tarjeta.module';
 import { TarjetaGuardada } from '../medios-pago/entities/tarjeta-guardada.entity';
 import { MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
 import { CredencialComercio } from '../comercios/entities/credencial-comercio.entity';
@@ -21,6 +22,7 @@ import { PagoMerchantAuthGuard } from './guards/pago-merchant-auth.guard';
     ConfigModule,
     MediosPagoModule,
     ComerciosModule,
+    TarjetaModule,
     NestConfigModule,
     TypeOrmModule.forRootAsync({
       imports: [NestConfigModule],
