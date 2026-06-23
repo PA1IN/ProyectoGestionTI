@@ -35,9 +35,17 @@ export type CheckoutDetail = {
   token: string;
   comercio: string;
   montoTotal: number;
+  moneda: string;
   estado: EstadoRespuestaTransaccion;
-  urlRetorno: string;
-  //codigoQr: string;
+  tarjeta: {
+    marca: string | null;
+    ultimosCuatro: string | null;
+    expMonth?: number | null;
+    expYear?: number | null;
+  } | null;
+  rrn?: number | null;
+  tipoOperacion?: 'CIT' | 'MIT' | null;
+  codigoAutorizacion?: string | null;
 };
 
 export type ProcessTransactionResult = TransactionResponseBase & {

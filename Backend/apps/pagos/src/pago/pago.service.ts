@@ -293,6 +293,7 @@ export class PagoService {
 
       const transaccion = await this.transaccionRepository.findOne({
         where: { id: payload.transactionId },
+        relations: ['detalles'],
       });
 
       const merchantCredential = transaccion?.merchantCredentialId
@@ -314,13 +315,23 @@ export class PagoService {
         }
       }
 
+      const detalle = transaccion?.detalles?.[0] ?? null;
+
       return {
         token,
         comercio: merchantCredential?.nombreComercio ?? payload.nombreComercio,
         montoTotal: payload.monto,
+        moneda: payload.moneda,
         estado,
-        urlRetorno: payload.returnUrl,
-        //codigoQr: `bancoapp://pay?transactionId=${payload.transactionId}&amount=${payload.monto}&currency=${payload.moneda}`,
+        tarjeta: detalle
+          ? {
+              marca: detalle.emisorTarjeta ?? null,
+              ultimosCuatro: detalle.ultimosCuatro ?? null,
+            }
+          : null,
+        rrn: transaccion?.rrn ?? null,
+        tipoOperacion: transaccion?.tipoOperacion ?? null,
+        codigoAutorizacion: detalle?.codigoAutorizacion ?? null,
       };
     } catch {
       throw new UnauthorizedException('Token inválido o expirado');
