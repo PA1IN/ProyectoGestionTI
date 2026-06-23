@@ -105,6 +105,7 @@ describe('PagoService', () => {
   it('processTransaction debe aprobar y guardar detalle e historial', async () => {
     jwtServiceMock.verifyAsync.mockResolvedValue({
       transactionId: 'tx-1',
+      idOrden: 'ORD-1',
       monto: 1250,
       moneda: 'CLP',
       nombreComercio: 'Demo',
@@ -112,7 +113,7 @@ describe('PagoService', () => {
       tipo: 'transaccion-init',
       iatAt: new Date().toISOString(),
     });
-    transaccionRepositoryMock.findOne.mockResolvedValue({ id: 'tx-1', estado: EstadoTransaccionDb.PENDING });
+    transaccionRepositoryMock.findOne.mockResolvedValue({ id: 'tx-1', estado: EstadoTransaccionDb.PENDIENTE });
     tarjetaServiceMock.autorizarBanco.mockResolvedValue({
       estado: 'APROBADA',
       message: 'Pago aprobado por saldo suficiente',
@@ -127,9 +128,10 @@ describe('PagoService', () => {
         estado: null,
       },
     });
-    transaccionRepositoryMock.save.mockResolvedValue({ id: 'tx-1', estado: EstadoTransaccionDb.SUCCESS });
+    transaccionRepositoryMock.save.mockResolvedValue({ id: 'tx-1', estado: EstadoTransaccionDb.APROBADO });
 
     const result = await service.processTransaction('jwt-token', {
+      idOrden: 'ORD-1',
       numeroTarjeta: '1111222233334444',
       titular: 'Juan Perez',
       fechaExpiracion: '12/28',

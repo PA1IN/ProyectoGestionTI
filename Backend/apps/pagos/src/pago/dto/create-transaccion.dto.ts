@@ -1,6 +1,11 @@
-import { IsNotEmpty, IsNumber, IsString, IsUrl, Min } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsString, IsUrl, Length, Min } from 'class-validator';
 
 export class CreateTransaccionDto {
+  @IsNotEmpty({ message: 'El id de orden es requerido' })
+  @IsString({ message: 'El id de orden debe ser un string' })
+  @Length(1, 100, { message: 'El id de orden debe tener entre 1 y 100 caracteres' })
+  idOrden: string;
+
   @IsNotEmpty({ message: 'El monto es requerido' })
   @IsNumber({}, { message: 'El monto debe ser numérico' })
   @Min(1, { message: 'El monto debe ser mayor a 0' })

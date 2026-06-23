@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import type { StringValue } from 'ms';
@@ -20,18 +20,6 @@ import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/ent
 import { CheckoutDetail, MitPaymentResult, PaymentCardSummary, ProcessTransactionResult, TokenizeMitResult } from './types/pago-response.types';
 import { CheckoutPayload, TransactionPayload } from './types/pago-jwt-payload.types';
 import { BancoEstadoOperacion } from '../tarjeta/types/banco.types';
-
-const mapEstadoApiToDb = (estado: EstadoRespuestaTransaccion): EstadoTransaccionDb => {
-  switch (estado) {
-    case EstadoRespuestaTransaccion.APROBADO:
-      return EstadoTransaccionDb.SUCCESS;
-    case EstadoRespuestaTransaccion.PENDIENTE:
-      return EstadoTransaccionDb.PENDING;
-    case EstadoRespuestaTransaccion.RECHAZADO:
-    default:
-      return EstadoTransaccionDb.REJECTED;
-  }
-};
 
 @Injectable()
 export class PagoService {
@@ -82,31 +70,87 @@ export class PagoService {
     const cardRecord = await this.mediosPagoService.buscarTarjetaPorToken(dto.paymentMethodToken);
 
     if (!cardRecord) {
-      return {
-        status: EstadoRespuestaTransaccion.RECHAZADO,
-        message: 'Medio de pago no encontrado',
-        transactionId: 'unknown',
-        paymentMethodToken: dto.paymentMethodToken,
-        mandateId: null,
-        card: {
-          brand: null,
-          last4: '0000',
-          expMonth: 0,
-          expYear: 0,
-        },
-        customer: dto.customer,
-      };
+      throw new NotFoundException('Medio de pago no encontrado');
     }
 
     const mandato = await this.mediosPagoService.buscarMandatoPorTarjetaYComercio(dto.paymentMethodToken, merchantCredential.id);
 
     if (!mandato) {
+      const transaccionRechazada = await this.transaccionRepository.save(
+        this.transaccionRepository.create({
+          monto: dto.monto.toFixed(2),
+          moneda: dto.moneda.toUpperCase(),
+          estado: EstadoTransaccionDb.RECHAZADO,
+          idOrden: dto.idOrden,
+          tipoOperacion: TipoOperacionTransaccionDb.MIT,
+          merchantCredentialId: merchantCredential.id,
+          paymentMethodToken: dto.paymentMethodToken,
+          mandateId: null,
+        }),
+      );
+
+      await this.historialRepository.save(
+        this.historialRepository.create({
+          transaccion: transaccionRechazada,
+          statusFrom: EstadoTransaccionDb.PENDIENTE,
+          statusTo: EstadoTransaccionDb.RECHAZADO,
+        }),
+      );
+
       return {
         status: EstadoRespuestaTransaccion.RECHAZADO,
         message: 'No existe un mandato activo para este comercio',
-        transactionId: 'unknown',
+        transactionId: transaccionRechazada.id,
         paymentMethodToken: dto.paymentMethodToken,
         mandateId: null,
+        card: {
+          brand: cardRecord.brand,
+          last4: cardRecord.last4,
+          expMonth: cardRecord.expMonth,
+          expYear: cardRecord.expYear,
+        },
+        customer: dto.customer,
+      };
+    }
+
+    const existingTransaction = await this.transaccionRepository.findOne({
+      where: {
+        idOrden: dto.idOrden,
+        merchantCredentialId: merchantCredential.id,
+        tipoOperacion: TipoOperacionTransaccionDb.MIT,
+      },
+    });
+
+    if (existingTransaction) {
+      const existingStatus = existingTransaction.estado === EstadoTransaccionDb.APROBADO
+        ? EstadoRespuestaTransaccion.APROBADO
+        : existingTransaction.estado === EstadoTransaccionDb.PENDIENTE
+          ? EstadoRespuestaTransaccion.PENDIENTE
+          : EstadoRespuestaTransaccion.RECHAZADO;
+
+      if (existingStatus !== EstadoRespuestaTransaccion.PENDIENTE) {
+        return {
+          status: existingStatus,
+          message: existingStatus === EstadoRespuestaTransaccion.APROBADO ? 'MIT procesado correctamente' : 'MIT ya fue rechazado',
+          transactionId: existingTransaction.id,
+          paymentMethodToken: dto.paymentMethodToken,
+          mandateId: existingTransaction.mandateId,
+          card: {
+            brand: cardRecord.brand,
+            last4: cardRecord.last4,
+            expMonth: cardRecord.expMonth,
+            expYear: cardRecord.expYear,
+          },
+          customer: dto.customer,
+        };
+      }
+
+      return {
+        status: EstadoRespuestaTransaccion.PENDIENTE,
+        message: 'La transacción ya está en proceso',
+        transactionId: existingTransaction.id,
+        paymentMethodToken: dto.paymentMethodToken,
+        mandateId: existingTransaction.mandateId,
         card: {
           brand: cardRecord.brand,
           last4: cardRecord.last4,
@@ -145,8 +189,8 @@ export class PagoService {
       this.transaccionRepository.create({
         monto: dto.monto.toFixed(2),
         moneda: dto.moneda.toUpperCase(),
-        estado: EstadoTransaccionDb.PENDING,
-        idOrden: `ORD-${Date.now()}`,
+        estado: EstadoTransaccionDb.PENDIENTE,
+        idOrden: dto.idOrden,
         tipoOperacion: TipoOperacionTransaccionDb.MIT,
         merchantCredentialId: merchantCredential.id,
         paymentMethodToken: dto.paymentMethodToken,
@@ -154,7 +198,7 @@ export class PagoService {
       }),
     );
 
-    transaccion.estado = EstadoTransaccionDb.SUCCESS;
+    transaccion.estado = EstadoTransaccionDb.APROBADO;
     transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
     await this.transaccionRepository.save(transaccion);
 
@@ -175,8 +219,8 @@ export class PagoService {
     await this.historialRepository.save(
       this.historialRepository.create({
         transaccion,
-        statusFrom: EstadoTransaccionDb.PENDING,
-        statusTo: EstadoTransaccionDb.SUCCESS,
+        statusFrom: EstadoTransaccionDb.PENDIENTE,
+        statusTo: EstadoTransaccionDb.APROBADO,
       }),
     );
 
@@ -195,7 +239,6 @@ export class PagoService {
       customer: dto.customer,
     };
   }
-
   async createTransaction(createTransaccionDto: CreateTransaccionDto, merchantCredentialId?: string) {
     const expiresInRaw = this.configService.get<string>('JWT_EXPIRES_IN') || '15m';
     const expiresIn = /^\d+$/.test(expiresInRaw)
@@ -203,12 +246,47 @@ export class PagoService {
       : (expiresInRaw as StringValue);
     const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
 
+    const existingTransaction = await this.transaccionRepository.findOne({
+      where: { idOrden: createTransaccionDto.idOrden },
+    });
+
+    if (existingTransaction) {
+      if (
+        existingTransaction.monto !== createTransaccionDto.monto.toFixed(2) ||
+        existingTransaction.moneda !== createTransaccionDto.moneda ||
+        existingTransaction.merchantCredentialId !== merchantCredentialId
+      ) {
+        throw new ConflictException('El id de orden ya fue utilizado con otra solicitud');
+      }
+
+      const existingPayload: TransactionPayload = {
+        transactionId: existingTransaction.id,
+        idOrden: existingTransaction.idOrden,
+        monto: createTransaccionDto.monto,
+        moneda: createTransaccionDto.moneda,
+        nombreComercio: createTransaccionDto.nombreComercio,
+        returnUrl: createTransaccionDto.returnUrl,
+        tipo: 'transaccion-init',
+        iatAt: new Date().toISOString(),
+      };
+
+      const token = await this.jwtService.signAsync(existingPayload, { expiresIn });
+
+      return {
+        token,
+        transactionUrl: `${frontendUrl}/checkout/${encodeURIComponent(token)}`,
+        transactionId: existingTransaction.id,
+        tokenType: 'Bearer',
+        expiresIn: expiresInRaw,
+      };
+    }
+
     const transaccion = await this.transaccionRepository.save(
       this.transaccionRepository.create({
         monto: createTransaccionDto.monto.toFixed(2),
         moneda: createTransaccionDto.moneda,
-        estado: EstadoTransaccionDb.PENDING,
-        idOrden: `ORD-${Date.now()}`,
+        estado: EstadoTransaccionDb.PENDIENTE,
+        idOrden: createTransaccionDto.idOrden,
         tipoOperacion: TipoOperacionTransaccionDb.CIT,
         merchantCredentialId: merchantCredentialId,
       }),
@@ -216,6 +294,7 @@ export class PagoService {
 
     const payload: TransactionPayload = {
       transactionId: transaccion.id,
+      idOrden: transaccion.idOrden,
       monto: createTransaccionDto.monto,
       moneda: createTransaccionDto.moneda,
       nombreComercio: createTransaccionDto.nombreComercio,
@@ -248,9 +327,9 @@ export class PagoService {
 
       const estado = !transaccion
         ? 'pendiente'
-        : transaccion.estado === EstadoTransaccionDb.SUCCESS
+        : transaccion.estado === EstadoTransaccionDb.APROBADO
           ? 'aprobada'
-          : transaccion.estado === EstadoTransaccionDb.REJECTED || transaccion.estado === EstadoTransaccionDb.FAILED
+          : transaccion.estado === EstadoTransaccionDb.RECHAZADO || transaccion.estado === EstadoTransaccionDb.FALLIDO
             ? 'rechazada'
             : 'pendiente';
 
@@ -288,6 +367,27 @@ export class PagoService {
         throw new UnauthorizedException('No se recibió credencial del comercio');
       }
       const merchantCredential = await this.resolveMerchantCredential(merchantIdToUse);
+      if (checkoutDto.idOrden !== payload.idOrden || checkoutDto.idOrden !== transaccion.idOrden) {
+        throw new UnauthorizedException('El id de orden no coincide con la transacción');
+      }
+
+      if (transaccion.estado !== EstadoTransaccionDb.PENDIENTE) {
+        const status = transaccion.estado === EstadoTransaccionDb.APROBADO
+          ? EstadoRespuestaTransaccion.APROBADO
+          : EstadoRespuestaTransaccion.RECHAZADO;
+
+        return {
+          status,
+          message: status === EstadoRespuestaTransaccion.APROBADO ? 'Transacción ya aprobada' : 'Transacción ya rechazada',
+          redirectUrl: `${payload.returnUrl}?status=${status}&transactionId=${transaccion.id}`,
+          transactionId: transaccion.id,
+          details: {
+            monto: payload.monto,
+            moneda: payload.moneda,
+            nombreComercio: payload.nombreComercio,
+          },
+        };
+      }
       const previousStatus = transaccion.estado;
 
       const bancoRespuesta = await this.tarjetaService.autorizarBanco({
@@ -299,7 +399,7 @@ export class PagoService {
       });
 
       if (bancoRespuesta.estado === BancoEstadoOperacion.RECHAZADA) {
-        transaccion.estado = EstadoTransaccionDb.REJECTED;
+        transaccion.estado = EstadoTransaccionDb.RECHAZADO;
         transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
         await this.transaccionRepository.save(transaccion);
 
@@ -307,7 +407,7 @@ export class PagoService {
           this.historialRepository.create({
             transaccion,
             statusFrom: previousStatus,
-            statusTo: EstadoTransaccionDb.REJECTED,
+            statusTo: EstadoTransaccionDb.RECHAZADO,
           }),
         );
 
@@ -342,7 +442,7 @@ export class PagoService {
         }),
       );
 
-      transaccion.estado = mapEstadoApiToDb(status);
+      transaccion.estado = status === EstadoRespuestaTransaccion.APROBADO ? EstadoTransaccionDb.APROBADO : EstadoTransaccionDb.RECHAZADO;
       transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
       transaccion.tipoOperacion = TipoOperacionTransaccionDb.CIT;
       transaccion.paymentMethodToken = null;
@@ -354,7 +454,7 @@ export class PagoService {
         this.historialRepository.create({
           transaccion,
           statusFrom: previousStatus,
-          statusTo: mapEstadoApiToDb(status),
+          statusTo: status === EstadoRespuestaTransaccion.APROBADO ? EstadoTransaccionDb.APROBADO : EstadoTransaccionDb.RECHAZADO,
         }),
       );
 

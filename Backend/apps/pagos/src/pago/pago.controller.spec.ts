@@ -30,6 +30,7 @@ describe('PagoController', () => {
 
   it('debe llamar al servicio al crear una transaccion', async () => {
     const payload = {
+      idOrden: 'ORD-1',
       monto: 1000,
       moneda: 'CLP',
       nombreComercio: 'Demo',
@@ -43,6 +44,7 @@ describe('PagoController', () => {
 
   it('debe llamar al servicio al procesar el checkout', async () => {
     const payload = {
+      idOrden: 'ORD-2',
       numeroTarjeta: '1111222233334444',
       titular: 'Juan Perez',
       fechaExpiracion: '12/28',
@@ -63,6 +65,7 @@ describe('PagoController', () => {
 
   it('debe llamar al servicio al tokenizar una tarjeta mit', async () => {
     const payload = {
+      idOrden: 'ORD-3',
       card: {
         number: '4111111111111111',
         exp_month: '12',

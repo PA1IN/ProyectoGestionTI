@@ -1,5 +1,5 @@
 CREATE TYPE estado_transaccion AS ENUM (
-  'PENDING', 'AUTHORIZED', 'SUCCESS', 'FAILED', 'REJECTED', 'REFUNDED'
+  'PENDIENTE', 'APROBADO', 'RECHAZADO', 'FALLIDO', 'DEVUELTO'
 );
 
 CREATE TYPE tipo_pago AS ENUM (
@@ -39,7 +39,7 @@ CREATE TYPE discrepancia_estado AS ENUM (
 
 CREATE TABLE transaccion (
   id          UUID               DEFAULT gen_random_uuid(),
-  id_orden    VARCHAR(255)       NOT NULL,
+  id_orden    VARCHAR(255)       NOT NULL UNIQUE,
   merchant_credential_id UUID,
   payment_method_token UUID,
   mandate_id  UUID,
@@ -47,7 +47,7 @@ CREATE TABLE transaccion (
   rrn         INT,
   monto       INT    NOT NULL,
   moneda      CHAR(3)            DEFAULT 'CLP',
-  estado      estado_transaccion DEFAULT 'PENDING',
+  estado      estado_transaccion DEFAULT 'PENDIENTE',
   created_at  TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
   updated_at  TIMESTAMP          DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id)

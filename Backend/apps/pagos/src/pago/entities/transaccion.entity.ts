@@ -1,15 +1,14 @@
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Column, Entity, Index, OneToMany, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { DetalleTransaccion } from './detalle-transaccion.entity';
 import { HistorialTransaccion } from './historial-transaccion.entity';
 import { EstadoRespuestaTransaccion } from '../enums/estado-respuesta-transaccion.enum';
 
 export enum EstadoTransaccionDb {
-  PENDING = 'PENDING',
-  AUTHORIZED = 'AUTHORIZED',
-  SUCCESS = 'SUCCESS',
-  FAILED = 'FAILED',
-  REJECTED = 'REJECTED',
-  REFUNDED = 'REFUNDED',
+  PENDIENTE = 'PENDIENTE',
+  APROBADO = 'APROBADO',
+  RECHAZADO = 'RECHAZADO',
+  FALLIDO = 'FALLIDO',
+  DEVUELTO = 'DEVUELTO',
 }
 
 export enum TipoOperacionTransaccionDb {
@@ -18,6 +17,7 @@ export enum TipoOperacionTransaccionDb {
 }
 
 @Entity({ name: 'transaccion' })
+@Index(['idOrden'], { unique: true })
 export class Transaccion {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -43,7 +43,7 @@ export class Transaccion {
   @Column({ length: 3, default: 'CLP' })
   moneda!: string;
 
-  @Column({ type: 'enum', enum: EstadoTransaccionDb, enumName: 'estado_transaccion', default: EstadoTransaccionDb.PENDING })
+  @Column({ type: 'enum', enum: EstadoTransaccionDb, enumName: 'estado_transaccion', default: EstadoTransaccionDb.PENDIENTE })
   estado!: EstadoTransaccionDb;
 
   @Column({ name: 'rrn', nullable: true, type: 'int' })

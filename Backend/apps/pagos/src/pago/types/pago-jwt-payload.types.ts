@@ -1,5 +1,6 @@
 export type TransactionPayload = {
   transactionId: string;
+  idOrden: string;
   monto: number;
   moneda: string;
   nombreComercio: string;
@@ -10,6 +11,7 @@ export type TransactionPayload = {
 
 export type CheckoutPayload = {
   transactionId: string;
+  idOrden: string;
   monto: number;
   moneda: string;
   nombreComercio: string;
