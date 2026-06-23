@@ -17,7 +17,7 @@ import { TarjetaService } from '../tarjeta/tarjeta.service';
 import { TarjetaGuardada } from '../medios-pago/entities/tarjeta-guardada.entity';
 import { MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
 import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/entities/credencial-comercio.entity';
-import { CheckoutDetail, MitPaymentResult, PaymentCardSummary, ProcessTransactionResult, TokenizeMitResult } from './types/pago-response.types';
+import { CheckoutDetail, CreateTransactionResult, MitPaymentResult, PaymentCardSummary, ProcessTransactionResult, TokenizeMitResult } from './types/pago-response.types';
 import { CheckoutPayload, TransactionPayload } from './types/pago-jwt-payload.types';
 import { BancoEstadoOperacion } from '../tarjeta/types/banco.types';
 
@@ -239,7 +239,7 @@ export class PagoService {
       customer: dto.customer,
     };
   }
-  async createTransaction(createTransaccionDto: CreateTransaccionDto, merchantCredentialId?: string) {
+  async createTransaction(createTransaccionDto: CreateTransaccionDto, merchantCredentialId?: string): Promise<CreateTransactionResult> {
     const expiresInRaw = this.configService.get<string>('JWT_EXPIRES_IN') || '15m';
     const expiresIn = /^\d+$/.test(expiresInRaw)
       ? Number(expiresInRaw)

@@ -6,13 +6,13 @@ export enum EstadoTarjetaGuardadaDb {
   ELIMINADA = 'ELIMINADA',
 }
 
+@Index('UQ_tarjeta_activa', ['numeroPan'], { unique: true, where: `"estado" = 'ACTIVA'` })
 @Entity({ name: 'tarjeta_guardada' })
 export class TarjetaGuardada {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Index({ unique: true })
-  @Column({ name: 'numero_pan', type: 'varchar', length: 19, unique: true })
+  @Column({ name: 'numero_pan', type: 'varchar', length: 19})
   numeroPan!: string;
 
   @Column({ name: 'exp_month', type: 'int' })

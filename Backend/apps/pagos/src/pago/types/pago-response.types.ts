@@ -9,16 +9,26 @@ export type PaymentCardSummary = {
   holderName: string | null;
 };
 
-export type ProcessTransactionResult = {
+export type TransactionCardSummary = Pick<PaymentCardSummary, 'brand' | 'last4' | 'expMonth' | 'expYear'>;
+
+export type TransactionDetails = {
+  monto: number;
+  moneda: string;
+  nombreComercio: string;
+};
+
+export type TransactionResponseBase = {
   status: EstadoRespuestaTransaccion;
   message: string;
-  redirectUrl: string;
   transactionId: string;
-  details?: {
-    monto: number;
-    moneda: string;
-    nombreComercio: string;
-  };
+};
+
+export type CreateTransactionResult = {
+  token: string;
+  transactionUrl: string;
+  transactionId: string;
+  tokenType: 'Bearer';
+  expiresIn: string;
 };
 
 export type CheckoutDetail = {
@@ -30,6 +40,11 @@ export type CheckoutDetail = {
   codigoQr: string;
 };
 
+export type ProcessTransactionResult = TransactionResponseBase & {
+  redirectUrl: string;
+  details?: TransactionDetails;
+};
+
 export type TokenizeMitResult = {
   status: EstadoRespuestaTransaccion;
   message: string;
@@ -38,13 +53,10 @@ export type TokenizeMitResult = {
   card: PaymentCardSummary;
 };
 
-export type MitPaymentResult = {
-  status: EstadoRespuestaTransaccion;
-  message: string;
-  transactionId: string;
+export type MitPaymentResult = TransactionResponseBase & {
   paymentMethodToken: string;
   mandateId: string | null;
-  card: Pick<PaymentCardSummary, 'brand' | 'last4' | 'expMonth' | 'expYear'>;
+  card: TransactionCardSummary;
   customer?: string;
   description?: string;
 };
