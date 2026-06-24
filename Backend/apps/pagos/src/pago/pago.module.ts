@@ -30,7 +30,7 @@ import { PagoMerchantAuthGuard } from './guards/pago-merchant-auth.guard';
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         url: configService.get<string>('DATABASE_URL'),
-        synchronize: configService.get<string>('NODE_ENV') !== 'production',
+        synchronize: true,
         autoLoadEntities: true,
       }),
     }),

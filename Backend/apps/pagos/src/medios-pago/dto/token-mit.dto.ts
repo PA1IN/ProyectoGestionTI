@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsNotEmpty, IsOptional, IsString, Length, Matches, ValidateNested } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID, Length, Matches, ValidateNested } from 'class-validator';
 
 export class CardPaymentDto {
   @IsNotEmpty({ message: 'El número de tarjeta es requerido' })
@@ -32,6 +32,7 @@ export class TokenizarMitDto {
   tarjeta!: CardPaymentDto;
 
   @IsNotEmpty({ message: 'El usuario es requerido' })
+  @IsUUID()
   @IsString({ message: 'El usuario debe ser un string' })
   userId!: string;
 
