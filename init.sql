@@ -11,7 +11,7 @@ CREATE TYPE tipo_operacion_transaccion AS ENUM (
 );
 
 CREATE TYPE estado_tarjeta_guardada AS ENUM (
-  'ACTIVA', 'INACTIVA', 'ELIMINADA'
+  'ACTIVA', 'ELIMINADA'
 );
 
 CREATE TYPE estado_mandato_pago AS ENUM (
@@ -56,7 +56,7 @@ CREATE TABLE transaccion (
 CREATE TABLE tarjeta (
   id               SERIAL PRIMARY KEY,
   numero           VARCHAR(16) NOT NULL UNIQUE,
-  titular          VARCHAR(100) NOT NULL,
+  titular          VARCHAR(7) NOT NULL,
   fecha_expiracion VARCHAR(7)   NOT NULL,
   cvv              VARCHAR(4)   NOT NULL,
   dinero           INT,

@@ -1,4 +1,4 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, IsUrl, Length } from 'class-validator';
 import { EstadoCredencialComercioDb } from '../entities/credencial-comercio.entity';
 
 export class CreateComercioDto {
@@ -10,4 +10,8 @@ export class CreateComercioDto {
   @IsOptional()
   @IsEnum(EstadoCredencialComercioDb, { message: 'El estado debe ser ACTIVA o INACTIVA' })
   estado?: EstadoCredencialComercioDb;
+
+  @IsNotEmpty({ message: 'La URL del webhook es requerida' })
+  @IsUrl({ require_tld: false }, { message: 'La URL del webhook debe ser una URL válida' })
+  webhookUrl!: string;
 }

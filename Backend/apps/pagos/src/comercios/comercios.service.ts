@@ -43,6 +43,7 @@ export class ComerciosService {
       nombreComercio,
       publicKey,
       privateKey,
+      webhookUrl: createComercioDto.webhookUrl,
       estado: createComercioDto.estado ?? EstadoCredencialComercioDb.ACTIVA,
     });
 
@@ -53,6 +54,7 @@ export class ComerciosService {
       nombreComercio: saved.nombreComercio,
       publicKey: saved.publicKey,
       privateKey: saved.privateKey,
+      webhookUrl: saved.webhookUrl,
       estado: saved.estado,
       createdAt: saved.createdAt,
     };

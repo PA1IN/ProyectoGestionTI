@@ -20,6 +20,9 @@ export class CredencialComercio {
   @Column({ name: 'private_key', type: 'varchar', length: 128, unique: true })
   privateKey!: string;
 
+  @Column({ name: 'webhook_url', type: 'varchar', length: 500})
+  webhookUrl!: string;
+
   @Column({ name: 'estado', type: 'enum', enum: EstadoCredencialComercioDb, enumName: 'estado_credencial_comercio', default: EstadoCredencialComercioDb.ACTIVA })
   estado!: EstadoCredencialComercioDb;
 

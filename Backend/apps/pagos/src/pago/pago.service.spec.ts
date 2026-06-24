@@ -17,6 +17,7 @@ import { EstadoRespuestaTransaccion } from './enums/estado-respuesta-transaccion
 
 describe('PagoService', () => {
   let service: PagoService;
+  const fetchMock = jest.fn();
 
   const jwtServiceMock = {
     signAsync: jest.fn(),
@@ -81,6 +82,8 @@ describe('PagoService', () => {
   };
 
   beforeEach(async () => {
+    (globalThis as any).fetch = fetchMock;
+    (global as any).fetch = fetchMock;
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PagoService,
@@ -100,6 +103,7 @@ describe('PagoService', () => {
 
     service = module.get<PagoService>(PagoService);
     jest.clearAllMocks();
+    fetchMock.mockResolvedValue({ ok: true, status: 204 });
   });
 
   it('processTransaction debe aprobar y guardar detalle e historial', async () => {
@@ -113,7 +117,9 @@ describe('PagoService', () => {
       tipo: 'transaccion-init',
       iatAt: new Date().toISOString(),
     });
-    transaccionRepositoryMock.findOne.mockResolvedValue({ id: 'tx-1', estado: EstadoTransaccionDb.PENDIENTE });
+    transaccionRepositoryMock.findOne.mockResolvedValue({ id: 'tx-1', estado: EstadoTransaccionDb.PENDIENTE, idOrden: 'ORD-1', merchantCredentialId: 'mc-1' });
+    credencialComercioRepositoryMock.findOne.mockResolvedValue({ id: 'mc-1', estado: 'ACTIVA', nombreComercio: 'Demo', webhookUrl: 'http://merchant.local/webhook' });
+    const webhookSpy = jest.spyOn(service as any, 'notificarWebhookComercio').mockResolvedValue(undefined);
     tarjetaServiceMock.autorizarBanco.mockResolvedValue({
       estado: 'APROBADA',
       message: 'Pago aprobado por saldo suficiente',
@@ -132,7 +138,7 @@ describe('PagoService', () => {
 
     const result = await service.processTransaction('jwt-token', {
       idOrden: 'ORD-1',
-      numeroTarjeta: '1111222233334444',
+      numeroTarjeta: '4111111111111111',
       titular: 'Juan Perez',
       fechaExpiracion: '12/28',
       cvv: '123',
@@ -141,7 +147,7 @@ describe('PagoService', () => {
     expect(detalleRepositoryMock.save).toHaveBeenCalledWith(
       expect.objectContaining({
         tipoPago: TipoPagoDb.TARJETA,
-        ultimosCuatro: '4444',
+        ultimosCuatro: '1111',
         emisorTarjeta: 'VISA',
         paymentMethodToken: null,
       }),
@@ -149,35 +155,169 @@ describe('PagoService', () => {
     expect(tarjetaServiceMock.autorizarBanco).toHaveBeenCalled();
     expect(mediosPagoServiceMock.guardarTarjeta).not.toHaveBeenCalled();
     expect(historialRepositoryMock.save).toHaveBeenCalled();
+    expect(webhookSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'mc-1',
+        webhookUrl: 'http://merchant.local/webhook',
+      }),
+      expect.objectContaining({
+        event: 'transaction.approved',
+        operationType: 'CIT',
+        transactionId: 'tx-1',
+        idOrden: 'ORD-1',
+      }),
+    );
     expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
   });
 
-  it('tokenizeMitCard debe guardar tarjeta y crear mandato', async () => {
-    credencialComercioRepositoryMock.findOne.mockResolvedValue({ id: 'mc-1', estado: 'ACTIVA' });
-    mediosPagoServiceMock.guardarTarjeta.mockResolvedValue({
-      id: 'pm-1',
+  it('processTransaction debe rechazar y notificar webhook con motivo', async () => {
+    jwtServiceMock.verifyAsync.mockResolvedValue({
+      transactionId: 'tx-2',
+      idOrden: 'ORD-2',
+      monto: 1250,
+      moneda: 'CLP',
+      nombreComercio: 'Demo',
+      returnUrl: 'http://localhost:3000/ok',
+      tipo: 'transaccion-init',
+      iatAt: new Date().toISOString(),
+    });
+    transaccionRepositoryMock.findOne.mockResolvedValue({ id: 'tx-2', estado: EstadoTransaccionDb.PENDIENTE, idOrden: 'ORD-2', merchantCredentialId: 'mc-1' });
+    credencialComercioRepositoryMock.findOne.mockResolvedValue({ id: 'mc-1', estado: 'ACTIVA', nombreComercio: 'Demo', webhookUrl: 'http://merchant.local/webhook' });
+    const webhookSpy = jest.spyOn(service as any, 'notificarWebhookComercio').mockResolvedValue(undefined);
+    tarjetaServiceMock.autorizarBanco.mockResolvedValue({
+      estado: 'RECHAZADA',
+      message: 'Tarjeta rechazada por saldo insuficiente',
+    });
+
+    const result = await service.processTransaction('jwt-token', {
+      idOrden: 'ORD-2',
+      numeroTarjeta: '4111111111111111',
+      titular: 'Juan Perez',
+      fechaExpiracion: '12/28',
+      cvv: '123',
+    });
+
+    expect(result.status).toBe(EstadoRespuestaTransaccion.RECHAZADO);
+    expect(webhookSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'mc-1',
+        webhookUrl: 'http://merchant.local/webhook',
+      }),
+      expect.objectContaining({
+        event: 'transaction.rejected',
+        operationType: 'CIT',
+        transactionId: 'tx-2',
+        idOrden: 'ORD-2',
+        reason: 'Tarjeta rechazada por saldo insuficiente',
+        card: expect.objectContaining({
+          expMonth: 12,
+          expYear: 2028,
+        }),
+      }),
+    );
+  });
+
+  it('processMitPayment debe aprobar y notificar webhook', async () => {
+    credencialComercioRepositoryMock.findOne.mockResolvedValue({
+      id: 'mc-1',
+      estado: 'ACTIVA',
+      nombreComercio: 'Demo',
+      webhookUrl: 'http://merchant.local/webhook',
+    });
+    mediosPagoServiceMock.buscarTarjetaPorToken.mockResolvedValue({
       brand: 'VISA',
       last4: '4444',
       expMonth: 12,
       expYear: 2028,
       holderName: 'Juan Perez',
+      numeroPan: '1111222233334444',
     });
-    mediosPagoServiceMock.crearMandato.mockResolvedValue({ id: 'md-1' });
+    mediosPagoServiceMock.buscarMandatoPorTarjetaYComercio.mockResolvedValue({ id: 'md-1' });
+    transaccionRepositoryMock.findOne.mockResolvedValue(null);
+    const webhookSpy = jest.spyOn(service as any, 'notificarWebhookComercio').mockResolvedValue(undefined);
+    tarjetaServiceMock.autorizarBanco.mockResolvedValue({
+      estado: 'APROBADA',
+      message: 'Pago aprobado',
+    });
+    transaccionRepositoryMock.save.mockResolvedValue({
+      id: 'tx-mit-1',
+      estado: EstadoTransaccionDb.APROBADO,
+      rrn: 123456,
+    });
 
-    const result = await service.tokenizeMitCard({
-      card: {
-        numero: '1111222233334444',
-        exp_mes: '12',
-        exp_ano: '2028',
-        cvc: '123',
-      },
-      titular: 'Juan Perez',
+    const result = await service.processMitPayment({
+      idOrden: 'ORD-MIT-1',
+      monto: 2500,
+      moneda: 'clp',
+      paymentMethodToken: '11111111-1111-4111-8111-111111111111',
+      customer: 'Cliente Demo',
     }, 'mc-1');
 
-    expect(mediosPagoServiceMock.guardarTarjeta).toHaveBeenCalled();
-    expect(mediosPagoServiceMock.crearMandato).toHaveBeenCalled();
-    expect(result.paymentMethodToken).toBe('pm-1');
-    expect(result.mandateId).toBe('md-1');
+    expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
+    expect(webhookSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'mc-1',
+        webhookUrl: 'http://merchant.local/webhook',
+      }),
+      expect.objectContaining({
+        event: 'transaction.approved',
+        operationType: 'MIT',
+        transactionId: 'tx-mit-1',
+        idOrden: 'ORD-MIT-1',
+      }),
+    );
+  });
+
+  it('processMitPayment debe rechazar y notificar webhook con motivo', async () => {
+    credencialComercioRepositoryMock.findOne.mockResolvedValue({
+      id: 'mc-1',
+      estado: 'ACTIVA',
+      nombreComercio: 'Demo',
+      webhookUrl: 'http://merchant.local/webhook',
+    });
+    mediosPagoServiceMock.buscarTarjetaPorToken.mockResolvedValue({
+      brand: 'VISA',
+      last4: '4444',
+      expMonth: 12,
+      expYear: 2028,
+      holderName: 'Juan Perez',
+      numeroPan: '1111222233334444',
+    });
+    mediosPagoServiceMock.buscarMandatoPorTarjetaYComercio.mockResolvedValue({ id: 'md-1' });
+    transaccionRepositoryMock.findOne.mockResolvedValue(null);
+    const webhookSpy = jest.spyOn(service as any, 'notificarWebhookComercio').mockResolvedValue(undefined);
+    transaccionRepositoryMock.save.mockResolvedValue({
+      id: 'tx-mit-2',
+      estado: EstadoTransaccionDb.RECHAZADO,
+      rrn: 123456,
+    });
+    tarjetaServiceMock.autorizarBanco.mockResolvedValue({
+      estado: 'RECHAZADA',
+      message: 'Saldo insuficiente',
+    });
+
+    const result = await service.processMitPayment({
+      idOrden: 'ORD-MIT-2',
+      monto: 2500,
+      moneda: 'clp',
+      paymentMethodToken: '11111111-1111-4111-8111-111111111111',
+      customer: 'Cliente Demo',
+    }, 'mc-1');
+
+    expect(result.status).toBe(EstadoRespuestaTransaccion.RECHAZADO);
+    expect(webhookSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'mc-1',
+        webhookUrl: 'http://merchant.local/webhook',
+      }),
+      expect.objectContaining({
+        event: 'transaction.rejected',
+        operationType: 'MIT',
+        transactionId: 'tx-mit-2',
+        idOrden: 'ORD-MIT-2',
+        reason: 'Saldo insuficiente',
+      }),
+    );
   });
 
   it('getAllTransacciones devuelve el repositorio', async () => {

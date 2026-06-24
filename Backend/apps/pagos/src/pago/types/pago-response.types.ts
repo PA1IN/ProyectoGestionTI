@@ -60,3 +60,26 @@ export type MitPaymentResult = TransactionResponseBase & {
   customer?: string;
   description?: string;
 };
+
+export type WebhookCardSummary = {
+  brand: string | null;
+  last4: string | null;
+  expMonth?: number | null;
+  expYear?: number | null;
+};
+
+export type TransactionWebhookPayload = {
+  event: 'transaction.approved' | 'transaction.rejected';
+  transactionId: string;
+  idOrden: string;
+  operationType: 'CIT' | 'MIT';
+  status: EstadoRespuestaTransaccion.APROBADO | EstadoRespuestaTransaccion.RECHAZADO;
+  monto: number;
+  moneda: string;
+  mandateId?: string | null;
+  paymentMethodToken?: string | null;
+  customer?: string;
+  card?: WebhookCardSummary | null;
+  reason?: string;
+  timestamp: string;
+};

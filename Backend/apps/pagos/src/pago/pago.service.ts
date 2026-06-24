@@ -14,12 +14,14 @@ import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.e
 import { MediosPagoService } from '../medios-pago/medios-pago.service';
 import { TarjetaService } from '../tarjeta/tarjeta.service';
 import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/entities/credencial-comercio.entity';
-import { CheckoutDetail, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult } from './types/pago-response.types';
+import { CheckoutDetail, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult, TransactionWebhookPayload } from './types/pago-response.types';
 import { CheckoutPayload, TransactionPayload } from './types/pago-jwt-payload.types';
 import { BancoEstadoOperacion } from '../tarjeta/types/banco.types';
 
 @Injectable()
 export class PagoService {
+  private readonly logger = new Logger(PagoService.name);
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -68,6 +70,27 @@ export class PagoService {
         }),
       );
 
+      await this.notificarWebhookComercio(merchantCredential, {
+        event: 'transaction.rejected',
+        transactionId: transaccionRechazada.id,
+        idOrden: dto.idOrden,
+        operationType: 'MIT',
+        status: EstadoRespuestaTransaccion.RECHAZADO,
+        monto: dto.monto,
+        moneda: dto.moneda.toUpperCase(),
+        mandateId: null,
+        paymentMethodToken: dto.paymentMethodToken,
+        customer: dto.customer,
+        card: {
+          brand: cardRecord.brand,
+          last4: cardRecord.last4,
+          expMonth: cardRecord.expMonth,
+          expYear: cardRecord.expYear,
+        },
+        reason: 'No existe un mandato activo para este comercio',
+        timestamp: new Date().toISOString(),
+      });
+
       return {
         status: EstadoRespuestaTransaccion.RECHAZADO,
         message: 'No existe un mandato activo para este comercio',
@@ -102,7 +125,7 @@ export class PagoService {
       if (existingStatus !== EstadoRespuestaTransaccion.PENDIENTE) {
         return {
           status: existingStatus,
-          message: existingStatus === EstadoRespuestaTransaccion.APROBADO ? 'MIT procesado correctamente' : 'MIT ya fue rechazado',
+          message: existingStatus === EstadoRespuestaTransaccion.APROBADO ? 'Transacción ya fue aprobada' : 'Transacción ya fue rechazado',
           transactionId: existingTransaction.id,
           paymentMethodToken: dto.paymentMethodToken,
           mandateId: existingTransaction.mandateId,
@@ -132,30 +155,6 @@ export class PagoService {
       };
     }
 
-    const bancoRespuesta = await this.tarjetaService.autorizarBanco({
-      numero: cardRecord.numeroPan,
-      titular: cardRecord.holderName ?? dto.customer ?? 'ANONIMO',
-      fechaExpiracion: `${String(cardRecord.expMonth).padStart(2, '0')}/${String(cardRecord.expYear).slice(-2)}`,
-      monto: dto.monto,
-    });
-
-    if (bancoRespuesta.estado === BancoEstadoOperacion.RECHAZADA) {
-      return {
-        status: EstadoRespuestaTransaccion.RECHAZADO,
-        message: bancoRespuesta.message,
-        transactionId: 'unknown',
-        paymentMethodToken: dto.paymentMethodToken,
-        mandateId: null,
-        card: {
-          brand: cardRecord.brand,
-          last4: cardRecord.last4,
-          expMonth: cardRecord.expMonth,
-          expYear: cardRecord.expYear,
-        },
-        customer: dto.customer,
-      };
-    }
-
     const transaccion = await this.transaccionRepository.save(
       this.transaccionRepository.create({
         monto: dto.monto.toFixed(2),
@@ -169,6 +168,63 @@ export class PagoService {
       }),
     );
 
+    const bancoRespuesta = await this.tarjetaService.autorizarBanco({
+      numero: cardRecord.numeroPan,
+      titular: cardRecord.holderName ?? dto.customer ?? 'ANONIMO',
+      fechaExpiracion: `${String(cardRecord.expMonth).padStart(2, '0')}/${String(cardRecord.expYear).slice(-2)}`,
+      monto: dto.monto,
+    });
+
+    if (bancoRespuesta.estado === BancoEstadoOperacion.RECHAZADA) {
+      transaccion.estado = EstadoTransaccionDb.RECHAZADO;
+      transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
+      await this.transaccionRepository.save(transaccion);
+
+      await this.historialRepository.save(
+        this.historialRepository.create({
+          transaccion,
+          statusFrom: EstadoTransaccionDb.PENDIENTE,
+          statusTo: EstadoTransaccionDb.RECHAZADO,
+        }),
+      );
+
+      await this.notificarWebhookComercio(merchantCredential, {
+        event: 'transaction.rejected',
+        transactionId: transaccion.id,
+        idOrden: dto.idOrden,
+        operationType: 'MIT',
+        status: EstadoRespuestaTransaccion.RECHAZADO,
+        monto: dto.monto,
+        moneda: dto.moneda.toUpperCase(),
+        mandateId: mandato.id,
+        paymentMethodToken: dto.paymentMethodToken,
+        customer: dto.customer,
+        card: {
+          brand: cardRecord.brand,
+          last4: cardRecord.last4,
+          expMonth: cardRecord.expMonth,
+          expYear: cardRecord.expYear,
+        },
+        reason: bancoRespuesta.message,
+        timestamp: new Date().toISOString(),
+      });
+
+      return {
+        status: EstadoRespuestaTransaccion.RECHAZADO,
+        message: bancoRespuesta.message,
+        transactionId: transaccion.id,
+        paymentMethodToken: dto.paymentMethodToken,
+        mandateId: mandato.id,
+        card: {
+          brand: cardRecord.brand,
+          last4: cardRecord.last4,
+          expMonth: cardRecord.expMonth,
+          expYear: cardRecord.expYear,
+        },
+        customer: dto.customer,
+      };
+    }
+
     transaccion.estado = EstadoTransaccionDb.APROBADO;
     transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
     await this.transaccionRepository.save(transaccion);
@@ -181,7 +237,7 @@ export class PagoService {
         tipoPago: TipoPagoDb.TARJETA,
         ultimosCuatro: cardRecord.last4,
         cuotas: 1,
-        codigoAutorizacion: `auth_${Math.random().toString(36).slice(2, 8)}`,
+        codigoAutorizacion: Math.random().toString(36).substring(2, 8).toUpperCase(),
         emisorTarjeta: cardRecord.brand ?? 'UNKNOWN',
         paymentMethodToken: dto.paymentMethodToken,
       }),
@@ -195,9 +251,29 @@ export class PagoService {
       }),
     );
 
+    await this.notificarWebhookComercio(merchantCredential, {
+      event: 'transaction.approved',
+      transactionId: transaccion.id,
+      idOrden: dto.idOrden,
+      operationType: 'MIT',
+      status: EstadoRespuestaTransaccion.APROBADO,
+      monto: dto.monto,
+      moneda: dto.moneda.toUpperCase(),
+      mandateId: mandato.id,
+      paymentMethodToken: dto.paymentMethodToken,
+      customer: dto.customer,
+      card: {
+        brand: cardRecord.brand,
+        last4: cardRecord.last4,
+        expMonth: cardRecord.expMonth,
+        expYear: cardRecord.expYear,
+      },
+      timestamp: new Date().toISOString(),
+    });
+
     return {
       status: EstadoRespuestaTransaccion.APROBADO,
-      message: 'MIT procesado correctamente',
+      message: 'Suscripcion procesada correctamente',
       transactionId: transaccion.id,
       paymentMethodToken: dto.paymentMethodToken,
       mandateId: mandato.id,
@@ -381,6 +457,9 @@ export class PagoService {
         };
       }
       const previousStatus = transaccion.estado;
+      const last4 = checkoutDto.numeroTarjeta.slice(-4);
+      const brand = this.detectarMarcaTarjeta(checkoutDto.numeroTarjeta);
+      const [expMonth, expYear] = this.parseFechaExpiracion(checkoutDto.fechaExpiracion);
 
       const bancoRespuesta = await this.tarjetaService.autorizarBanco({
         numero: checkoutDto.numeroTarjeta,
@@ -403,6 +482,26 @@ export class PagoService {
           }),
         );
 
+        const [rejectedExpMonth, rejectedExpYear] = this.parseFechaExpiracion(checkoutDto.fechaExpiracion);
+
+        await this.notificarWebhookComercio(merchantCredential, {
+          event: 'transaction.rejected',
+          transactionId: transaccion.id,
+          idOrden: checkoutDto.idOrden,
+          operationType: 'CIT',
+          status: EstadoRespuestaTransaccion.RECHAZADO,
+          monto: payload.monto,
+          moneda: payload.moneda,
+          card: {
+            brand,
+            last4,
+            expMonth: rejectedExpMonth,
+            expYear: rejectedExpYear,
+          },
+          reason: bancoRespuesta.message,
+          timestamp: new Date().toISOString(),
+        });
+
         return {
           status: EstadoRespuestaTransaccion.RECHAZADO,
           message: bancoRespuesta.message,
@@ -417,8 +516,6 @@ export class PagoService {
       }
 
       const status = EstadoRespuestaTransaccion.APROBADO;
-      const last4 = checkoutDto.numeroTarjeta.slice(-4);
-      const brand = this.detectarMarcaTarjeta(checkoutDto.numeroTarjeta);
 
       await this.detalleRepository.save(
         this.detalleRepository.create({
@@ -428,7 +525,7 @@ export class PagoService {
           tipoPago: TipoPagoDb.TARJETA,
           ultimosCuatro: last4,
           cuotas: status === EstadoRespuestaTransaccion.APROBADO ? 1 : 0,
-          codigoAutorizacion: `auth_${Math.random().toString(36).slice(2, 8)}`,
+          codigoAutorizacion: Math.random().toString(36).substring(2, 8).toUpperCase(),
           emisorTarjeta: brand,
           paymentMethodToken: null,
         }),
@@ -450,6 +547,23 @@ export class PagoService {
         }),
       );
 
+      await this.notificarWebhookComercio(merchantCredential, {
+        event: 'transaction.approved',
+        transactionId: transaccion.id,
+        idOrden: checkoutDto.idOrden,
+        operationType: 'CIT',
+        status: EstadoRespuestaTransaccion.APROBADO,
+        monto: payload.monto,
+        moneda: payload.moneda,
+        card: {
+          brand,
+          last4,
+          expMonth,
+          expYear,
+        },
+        timestamp: new Date().toISOString(),
+      });
+
       const isApproved = status === EstadoRespuestaTransaccion.APROBADO;
       const transactionId = transaccion.id;
 
@@ -465,7 +579,10 @@ export class PagoService {
         },
       };
     } catch (error) {
-      Logger.error('Error al procesar la transacción', error);
+      this.logger.error(
+        'Error al procesar la transacción',
+        error instanceof Error ? error.stack : String(error),
+      );
       return {
         status: EstadoRespuestaTransaccion.RECHAZADO,
         message: 'Token inválido o expirado',
@@ -491,6 +608,43 @@ export class PagoService {
     return merchantCredential;
   }
 
+  private async notificarWebhookComercio(
+    merchantCredential: CredencialComercio,
+    payload: TransactionWebhookPayload,
+  ): Promise<void> {
+    if (!merchantCredential.webhookUrl) {
+      this.logger.debug(`Webhook omitido para ${merchantCredential.id}: no hay URL configurada`);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const response = await fetch(merchantCredential.webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        this.logger.warn(
+          `Webhook del comercio respondió con estado ${response.status} para ${merchantCredential.id}`,
+        );
+      }
+    } catch (error) {
+      this.logger.warn(
+        `No fue posible notificar el webhook del comercio ${merchantCredential.id}, url: ${merchantCredential.webhookUrl}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   private detectarMarcaTarjeta(numeroPan: string) {
     if (/^4/.test(numeroPan)) {
       return 'VISA';
@@ -505,6 +659,19 @@ export class PagoService {
     }
 
     return 'UNKNOWN';
+  }
+
+  private parseFechaExpiracion(fechaExpiracion: string): [number | null, number | null] {
+    const [monthRaw, yearRaw] = fechaExpiracion.split('/');
+    const month = Number.parseInt(monthRaw, 10);
+    const year = Number.parseInt(yearRaw, 10);
+
+    if (Number.isNaN(month) || Number.isNaN(year)) {
+      return [null, null];
+    }
+
+    const normalizedYear = yearRaw.length === 2 ? 2000 + year : year;
+    return [month, normalizedYear];
   }
 
   async getDetalleTransaccion(id: number) {
