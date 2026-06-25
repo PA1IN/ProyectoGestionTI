@@ -68,6 +68,25 @@ export class GatewayController {
     };
   }
 
+  @Post('comercios')
+  @AdminOnly()
+  async createComercio(
+    @Body() body: Record<string, unknown>,
+    @Headers() headers: IncomingHttpHeaders,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.relay(
+      response,
+      this.gatewayService.forwardJsonRequest(
+        this.gatewayService.pagosBaseUrl,
+        '/comercios',
+        'POST',
+        body,
+        headers,
+      ),
+    );
+  }
+
   @Post('tarjeta')
   @Public()
   async createTarjeta(
