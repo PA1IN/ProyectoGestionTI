@@ -1,20 +1,7 @@
 import { Column, Entity, Index, OneToMany, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { DetalleTransaccion } from './detalle-transaccion.entity';
 import { HistorialTransaccion } from './historial-transaccion.entity';
-import { EstadoRespuestaTransaccion } from '../enums/estado-respuesta-transaccion.enum';
-
-export enum EstadoTransaccionDb {
-  PENDIENTE = 'PENDIENTE',
-  APROBADO = 'APROBADO',
-  RECHAZADO = 'RECHAZADO',
-  FALLIDO = 'FALLIDO',
-  DEVUELTO = 'DEVUELTO',
-}
-
-export enum TipoOperacionTransaccionDb {
-  CIT = 'CIT',
-  MIT = 'MIT',
-}
+import { EstadoTransaccionDb, TipoOperacionTransaccionDb } from '../enums/transaccion.enum';
 
 @Entity({ name: 'transaccion' })
 @Index(['idOrden'], { unique: true })

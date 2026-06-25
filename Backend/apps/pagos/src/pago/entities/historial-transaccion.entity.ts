@@ -1,5 +1,6 @@
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn, JoinColumn, CreateDateColumn } from 'typeorm';
-import { EstadoTransaccionDb, Transaccion } from './transaccion.entity';
+import { Transaccion } from './transaccion.entity';
+import { EstadoTransaccionDb } from '../enums/transaccion.enum';
 
 @Entity({ name: 'historial_transaccion' })
 export class HistorialTransaccion {
