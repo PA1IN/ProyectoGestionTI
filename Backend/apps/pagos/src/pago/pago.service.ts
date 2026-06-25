@@ -436,7 +436,7 @@ export class PagoService {
         throw new UnauthorizedException('No se recibió credencial del comercio');
       }
       const merchantCredential = await this.resolveMerchantCredential(merchantIdToUse);
-      if (checkoutDto.idOrden !== payload.idOrden || checkoutDto.idOrden !== transaccion.idOrden) {
+      if (payload.idOrden !== transaccion.idOrden) {
         throw new UnauthorizedException('El id de orden no coincide con la transacción');
       }
 
@@ -488,7 +488,7 @@ export class PagoService {
         await this.notificarWebhookComercio(merchantCredential, {
           event: 'transaction.rejected',
           transactionId: transaccion.id,
-          idOrden: checkoutDto.idOrden,
+          idOrden: payload.idOrden,
           operationType: 'CIT',
           status: EstadoRespuestaTransaccion.RECHAZADO,
           monto: payload.monto,
@@ -551,7 +551,7 @@ export class PagoService {
       await this.notificarWebhookComercio(merchantCredential, {
         event: 'transaction.approved',
         transactionId: transaccion.id,
-        idOrden: checkoutDto.idOrden,
+        idOrden: payload.idOrden,
         operationType: 'CIT',
         status: EstadoRespuestaTransaccion.APROBADO,
         monto: payload.monto,
