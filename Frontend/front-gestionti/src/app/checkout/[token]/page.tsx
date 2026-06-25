@@ -3,11 +3,10 @@
 import React, { useState, use } from 'react';
 import { useDetalleTransaccion, useProcesarPago, DatosPagoTarjeta } from '@/hooks/useCheckout';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, XCircle } from 'lucide-react';
+import { AlertCircle, ShieldCheck, XCircle } from 'lucide-react';
 import { FormTarjeta } from '@/components/Checkout/FormTarjeta';
 import { MetodosPago } from '@/components/Checkout/MetodosPago';
 import { ResumenOrden } from '@/components/Checkout/ResumenOrden';
-import { BilleteraDigital } from '@/components/Checkout/BilleteraDigital';
 
 
 export default function CheckoutPage({ params }: { params: Promise<{ token: string }> }) {
@@ -37,8 +36,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ token: stri
             router.push(`/resultado/exito?comercio=${transaccion?.comercio}&returnUrl=${encodedReturnUrl}`);
         } catch (error) {
             console.error("error al procesar el pago, pago rechazado", error);
-            const returnUrl = transaccion?.urlRetorno || '/';
-            const encodedReturnUrl = encodeURIComponent(returnUrl);
+            const encodedReturnUrl = encodeURIComponent(`${window.location.origin}/resultado/fallo`);
             router.push(`/resultado/fallo?token=${token}&comercio=${transaccion?.comercio}&returnUrl=${encodedReturnUrl}`);
         }
     };
@@ -92,8 +90,14 @@ export default function CheckoutPage({ params }: { params: Promise<{ token: stri
                                 <FormTarjeta onSubmit={ProcesarPago} isProcessing={procesarPago.isPending} />
                             </div>
                         ) : (
-                            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center">
-                               <BilleteraDigital qrData={transaccion?.codigoQr} isLoading={cargaTransaccion}/>
+                            <div className="bg-white p-6 rounded-xl border border-amber-200 shadow-sm text-center min-h-[350px] flex flex-col items-center justify-center gap-4">
+                                <AlertCircle className="w-12 h-12 text-amber-500" />
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-900">Billetera digital no disponible</h3>
+                                    <p className="text-sm text-gray-500 mt-2 max-w-sm mx-auto">
+                                        El backend actual no expone el checkout por tarjeta para este flujo. Cambia a tarjeta para completar el pago.
+                                    </p>
+                                </div>
                             </div>
                         )}
                     </div>

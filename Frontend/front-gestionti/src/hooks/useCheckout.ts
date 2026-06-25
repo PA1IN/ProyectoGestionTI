@@ -5,9 +5,17 @@ export interface DetalleTransaccion {
     token: string;
     comercio: string;
     montoTotal: number;
-    estado: 'pendiente' | 'aprobada' | 'rechazada';
-    urlRetorno?: string; // url a la que se redirige al finalizar el proceso de pago
-    codigoQr?: string; // url o datos para generar el código qr en caso de pago con billetera digital
+    moneda: string;
+    estado: 'APROBADO' | 'RECHAZADO' | 'PENDIENTE';
+    tarjeta: {
+        marca: string | null;
+        ultimosCuatro: string | null;
+        expMonth?: number | null;
+        expYear?: number | null;
+    } | null;
+    rrn?: number | null;
+    tipoOperacion?: 'CIT' | 'MIT' | null;
+    codigoAutorizacion?: string | null;
 }
 
 export interface DatosPagoTarjeta {
@@ -34,7 +42,7 @@ export function useDetalleTransaccion(token: string) {
     return useQuery<DetalleTransaccion>({
         queryKey: ['transaccion', token],
         queryFn: async () => {
-            const respuesta = await api.get(`/pago/checkout/${token}`);
+            const respuesta = await api.get(`/ucnpay/checkout/${token}`);
             return respuesta.data as DetalleTransaccion;
         },
         enabled: !!token,
@@ -61,7 +69,7 @@ export function useProcesarPago(tokenTransaccion: string) {
     return useMutation({
         mutationFn: async (datosTarjeta: DatosPagoTarjeta) => {
             const respuesta = await api.post(
-                `/pago/checkout/${tokenTransaccion}/process`,
+                `/ucnpay/checkout/${tokenTransaccion}/process`,
                 datosTarjeta,
             );
 
@@ -93,8 +101,8 @@ export function useProcesarPago(tokenTransaccion: string) {
 export function useGenerarQr(tokenTransaccion: string) {
     return useMutation({
         mutationFn: async () => {
-            const respuesta = await api.get(`/pago/checkout/${tokenTransaccion}`);
-            return { qrData: respuesta.data.codigoQr as string };
+            const respuesta = await api.get(`/ucnpay/checkout/${tokenTransaccion}`);
+            return { qrData: respuesta.data.codigoQr as string | undefined };
         }
     });
 }
@@ -119,7 +127,7 @@ export function useConsultarEstadoPago(tokenTransaccion: string, activarPolling:
     return useQuery({
         queryKey: ['estadoPago', tokenTransaccion],
         queryFn: async () => {
-            const respuesta = await api.get(`/pago/checkout/${tokenTransaccion}`);
+            const respuesta = await api.get(`/ucnpay/checkout/${tokenTransaccion}`);
             return { estado: respuesta.data.estado as string };
         },
         enabled: activarPolling,

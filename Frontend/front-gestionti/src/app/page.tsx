@@ -12,7 +12,8 @@ export default function Home() {
     setGenerandoCheckout(true);
 
     try {
-      const respuesta = await api.post('/pago/cit/init', {
+      const respuesta = await api.post('/ucnpay/init', {
+        idOrden: crypto.randomUUID(),
         monto: 16000,
         moneda: 'CLP',
         nombreComercio: 'Proyecto Gestión TI',
