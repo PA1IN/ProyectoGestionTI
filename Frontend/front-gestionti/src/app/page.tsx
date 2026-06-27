@@ -22,6 +22,7 @@ export default function Home() {
 
       window.location.href = respuesta.data.transactionUrl;
     } catch (error) {
+      window.alert(error);
       console.error('No se pudo crear la transaccion de checkout:', error);
       setGenerandoCheckout(false);
       window.location.href = '/login';
