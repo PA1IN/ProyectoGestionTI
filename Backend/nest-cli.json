@@ -27,13 +27,13 @@
         "tsConfigPath": "apps/conciliacion/tsconfig.app.json"
       }
     },
-    "pagos": {
-      "type": "application",
-      "root": "apps/pagos",
-      "entryFile": "main",
-      "sourceRoot": "apps/pagos/src",
+    "config": {
+      "type": "library",
+      "root": "libs/config",
+      "entryFile": "src/index",
+      "sourceRoot": "libs/config/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/pagos/tsconfig.app.json"
+        "tsConfigPath": "libs/config/tsconfig.lib.json"
       }
     },
     "gateway": {
@@ -45,13 +45,31 @@
         "tsConfigPath": "apps/gateway/tsconfig.app.json"
       }
     },
-    "config": {
-      "type": "library",
-      "root": "libs/config",
-      "entryFile": "src/index",
-      "sourceRoot": "libs/config/src",
+    "pagos": {
+      "type": "application",
+      "root": "apps/pagos",
+      "entryFile": "main",
+      "sourceRoot": "apps/pagos/src",
       "compilerOptions": {
-        "tsConfigPath": "libs/config/tsconfig.lib.json"
+        "tsConfigPath": "apps/pagos/tsconfig.app.json"
+      }
+    },
+    "rmq": {
+      "type": "library",
+      "root": "libs/rmq",
+      "entryFile": "index",
+      "sourceRoot": "libs/rmq/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/rmq/tsconfig.lib.json"
+      }
+    },
+    "webhook-worker": {
+      "type": "application",
+      "root": "apps/webhook-worker",
+      "entryFile": "main",
+      "sourceRoot": "apps/webhook-worker/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/webhook-worker/tsconfig.app.json"
       }
     }
   }

@@ -27,6 +27,12 @@
     ],
     "baseUrl": "./",
     "paths": {
+      "@app/rmq": [
+        "libs/rmq/src"
+      ],
+      "@app/rmq/*": [
+        "libs/rmq/src/*"
+      ],
       "@libs/config": [
         "libs/config/src"
       ]
