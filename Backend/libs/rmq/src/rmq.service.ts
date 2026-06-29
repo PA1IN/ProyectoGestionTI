@@ -43,7 +43,6 @@ export class RabbitMqService implements OnModuleDestroy {
         try {
           const content = JSON.parse(msg.content.toString());
           
-          // Le pasamos el contenido mapeado a la función que procesa
           await onMessage(content); 
           
           channel.ack(msg);
