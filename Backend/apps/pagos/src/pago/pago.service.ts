@@ -15,7 +15,7 @@ import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.e
 import { MediosPagoService } from '../medios-pago/medios-pago.service';
 import { TarjetaService } from '../tarjeta/tarjeta.service';
 import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/entities/credencial-comercio.entity';
-import { CheckoutDetail, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult, TransactionWebhookPayload } from './types/pago-response.types';
+import { CheckoutDetail, CheckoutQrResult, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult, TransactionWebhookPayload } from './types/pago-response.types';
 import { CheckoutPayload, TransactionPayload } from './types/pago-jwt-payload.types';
 import { BancoEstadoOperacion } from '../tarjeta/types/banco.types';
 
@@ -411,6 +411,56 @@ export class PagoService {
         codigoAutorizacion: detalle?.codigoAutorizacion ?? null,
       };
     } catch {
+      throw new UnauthorizedException('Token inválido o expirado');
+    }
+  }
+
+  async generateCheckoutQr(token: string): Promise<CheckoutQrResult> {
+    try {
+      const payload = await this.jwtService.verifyAsync<CheckoutPayload>(token, {
+        secret: this.configService.get<string>('JWT_SECRET'),
+      });
+
+      const transaccion = await this.transaccionRepository.findOne({
+        where: { id: payload.transactionId },
+      });
+
+      if (!transaccion) {
+        throw new NotFoundException('Transacción no encontrada');
+      }
+
+      if (transaccion.estado !== EstadoTransaccionDb.PENDIENTE) {
+        throw new ConflictException('La transacción ya fue procesada');
+      }
+
+      const qrPayload = {
+        transactionId: payload.transactionId,
+        idOrden: payload.idOrden,
+        monto: payload.monto,
+        moneda: payload.moneda,
+        nombreComercio: payload.nombreComercio,
+        returnUrl: payload.returnUrl,
+        medioPago: 'QR' as const,
+        generatedAt: new Date().toISOString(),
+      };
+
+      const qrData = await this.jwtService.signAsync(qrPayload, {
+        secret: this.configService.get<string>('JWT_SECRET'),
+        expiresIn: '10m',
+      });
+
+      return {
+        status: EstadoRespuestaTransaccion.APROBADO,
+        message: 'QR generado correctamente',
+        transactionId: transaccion.id,
+        qrData,
+        codigoQr: qrData,
+      };
+    } catch (error) {
+      if (error instanceof ConflictException || error instanceof NotFoundException || error instanceof UnauthorizedException) {
+        throw error;
+      }
+
       throw new UnauthorizedException('Token inválido o expirado');
     }
   }

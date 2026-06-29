@@ -31,6 +31,11 @@ export type CreateTransactionResult = {
   expiresIn: string;
 };
 
+export type CheckoutQrResult = TransactionResponseBase & {
+  qrData: string;
+  codigoQr: string;
+};
+
 export type CheckoutDetail = {
   token: string;
   comercio: string;

@@ -10,9 +10,10 @@ import { TarjetaService } from '../tarjeta/tarjeta.service';
 import { TarjetaGuardada } from '../medios-pago/entities/tarjeta-guardada.entity';
 import { MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
 import { CredencialComercio } from '../comercios/entities/credencial-comercio.entity';
-import { Transaccion, EstadoTransaccionDb } from './entities/transaccion.entity';
+import { Transaccion } from './entities/transaccion.entity';
 import { HistorialTransaccion } from './entities/historial-transaccion.entity';
 import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.entity';
+import { EstadoTransaccionDb } from './enums/transaccion.enum';
 import { EstadoRespuestaTransaccion } from './enums/estado-respuesta-transaccion.enum';
 
 describe('PagoService', () => {
@@ -168,6 +169,44 @@ describe('PagoService', () => {
       }),
     );
     expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
+  });
+
+  it('generateCheckoutQr debe devolver un QR firmado para transacciones pendientes', async () => {
+    jwtServiceMock.verifyAsync.mockResolvedValue({
+      transactionId: 'tx-qr-1',
+      idOrden: 'ORD-QR-1',
+      monto: 990,
+      moneda: 'CLP',
+      nombreComercio: 'Demo QR',
+      returnUrl: 'http://localhost:3000/ok',
+      iatAt: new Date().toISOString(),
+    });
+    transaccionRepositoryMock.findOne.mockResolvedValue({
+      id: 'tx-qr-1',
+      estado: EstadoTransaccionDb.PENDIENTE,
+    });
+    jwtServiceMock.signAsync.mockResolvedValue('signed-qr-token');
+
+    const result = await service.generateCheckoutQr('jwt-token');
+
+    expect(jwtServiceMock.signAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transactionId: 'tx-qr-1',
+        idOrden: 'ORD-QR-1',
+        medioPago: 'QR',
+      }),
+      expect.objectContaining({
+        secret: 'secret',
+        expiresIn: '10m',
+      }),
+    );
+    expect(result).toEqual({
+      status: EstadoRespuestaTransaccion.APROBADO,
+      message: 'QR generado correctamente',
+      transactionId: 'tx-qr-1',
+      qrData: 'signed-qr-token',
+      codigoQr: 'signed-qr-token',
+    });
   });
 
   it('processTransaction debe rechazar y notificar webhook con motivo', async () => {
