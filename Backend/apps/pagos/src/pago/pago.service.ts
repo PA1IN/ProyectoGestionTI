@@ -642,6 +642,120 @@ export class PagoService {
       };
     }
   }
+  async processQrTransaction(token: string, merchantCredentialId?: string): Promise<ProcessTransactionResult> {
+    try {
+      // Verificar QR
+      const payload = await this.jwtService.verifyAsync<any>(token, {
+        secret: this.configService.get<string>('JWT_SECRET'),
+      });
+
+      // Validación
+      if (payload.medioPago !== 'QR') {
+        throw new UnauthorizedException('El token provisto no corresponde a una operación por QR');
+      }
+
+      // 2. Buscamos la transaccion
+      const transaccion = await this.transaccionRepository.findOne({ where: { id: payload.transactionId } });
+      if (!transaccion) {
+        return {
+          status: EstadoRespuestaTransaccion.RECHAZADO,
+          message: 'Transacción no encontrada',
+          transactionId: payload.transactionId,
+          redirectUrl: `${payload.returnUrl}?status=RECHAZADO&transactionId=${payload.transactionId}`,
+        };
+      }
+
+      const merchantIdToUse = merchantCredentialId ?? transaccion.merchantCredentialId;
+      if (!merchantIdToUse) {
+      throw new UnauthorizedException('No se recibió credencial del comercio');
+      }
+      const merchantCredential = await this.resolveMerchantCredential(merchantIdToUse);
+
+      // 3. Validar si la transacción ya fue procesada previamente
+      if (transaccion.estado !== EstadoTransaccionDb.PENDIENTE) {
+        const status = transaccion.estado === EstadoTransaccionDb.APROBADO
+          ? EstadoRespuestaTransaccion.APROBADO
+          : EstadoRespuestaTransaccion.RECHAZADO;
+
+        return {
+          status,
+          message: status === EstadoRespuestaTransaccion.APROBADO ? 'Transacción ya aprobada' : 'Transacción ya rechazada',
+          redirectUrl: `${payload.returnUrl}?status=${status}&transactionId=${transaccion.id}`,
+          transactionId: transaccion.id,
+          details: {
+            monto: payload.monto,
+            moneda: payload.moneda,
+            nombreComercio: payload.nombreComercio,
+          },
+        };
+      }
+
+      const previousStatus = transaccion.estado;
+      const status = EstadoRespuestaTransaccion.APROBADO;
+
+      // 4. Guardar el detalle de la transacción
+      await this.detalleRepository.save(
+        this.detalleRepository.create({
+          transaccion,
+          nombreUsuario: 'COMPRADOR_QR_SIMULADO',
+          rut: '',
+          tipoPago: TipoPagoDb.QR ,
+          ultimosCuatro: null,   // No aplica para QR
+          cuotas: 1,
+          codigoAutorizacion: Math.random().toString(36).substring(2, 8).toUpperCase(),
+          emisorTarjeta: 'BILLETERA_DIGITAL', 
+          paymentMethodToken: null,
+        }),
+      );
+
+      // 5. Actualizar el estado de la transacción principal
+      transaccion.estado = EstadoTransaccionDb.APROBADO;
+      transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
+      transaccion.tipoOperacion = TipoOperacionTransaccionDb.CIT;
+      await this.transaccionRepository.save(transaccion);
+
+      // 6. Registrar el cambio de estado en el historial
+      await this.historialRepository.save(
+        this.historialRepository.create({
+          transaccion,
+          statusFrom: previousStatus,
+          statusTo: EstadoTransaccionDb.APROBADO,
+        }),
+      );
+
+      // 7. Notificar al comercio mediante el Webhook
+      await this.notificarWebhookComercio(merchantCredential, {
+        event: 'transaction.approved',
+        transactionId: transaccion.id,
+        idOrden: payload.idOrden,
+        operationType: 'CIT',
+        status: EstadoRespuestaTransaccion.APROBADO,
+        monto: payload.monto,
+        moneda: payload.moneda,
+        timestamp: new Date().toISOString(),
+      });
+
+      // 8. Retornar la respuesta con la URL de redirección al flujo frontend
+      return {
+        status,
+        message: 'Transacción QR aprobada exitosamente (Simulado)',
+        redirectUrl: `${payload.returnUrl}?status=${status}&transactionId=${transaccion.id}`,
+        transactionId: transaccion.id,
+        details: {
+          monto: payload.monto,
+          moneda: payload.moneda,
+          nombreComercio: payload.nombreComercio,
+        },
+      };
+
+    } catch (error) {
+      this.logger.error(
+        'Error al procesar la transacción QR',
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new UnauthorizedException('Token de QR inválido o expirado');
+    }
+  }
 
   private async resolveMerchantCredential(merchantCredentialId?: string) {
     if (!merchantCredentialId) {

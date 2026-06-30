@@ -189,6 +189,47 @@ export class GatewayController {
       ),
     );
   }
+  @Get('ucnpay/checkout/:token/qr')
+  @Public()
+  async getCheckoutQr(
+    @Param('token') token: string,
+    @Headers() headers: IncomingHttpHeaders,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.relay(
+      response,
+      this.gatewayService.forwardJsonRequest(
+        this.gatewayService.pagosBaseUrl,
+        `/ucnpay/checkout/${token}/qr`,
+        'GET',
+        undefined,
+        headers,
+      ),
+    );
+  }
+
+  @Post('ucnpay/checkout/:token/process/qr')
+  @Public()
+  async processCheckoutQr(
+    @Param('token') token: string,
+    @Headers() headers: IncomingHttpHeaders,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    if (!token) {
+      throw new BadRequestException('Se requiere el token de checkout');
+    }
+
+    return this.relay(
+      response,
+      this.gatewayService.forwardJsonRequest(
+        this.gatewayService.pagosBaseUrl,
+        `/ucnpay/checkout/${token}/process/qr`,
+        'POST',
+        undefined, 
+        headers,
+      ),
+    );
+  }
 
   @Post('ucnpay/init/suscription')
   @Public()

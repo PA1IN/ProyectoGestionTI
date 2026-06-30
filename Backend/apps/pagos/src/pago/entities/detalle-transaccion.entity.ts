@@ -5,6 +5,7 @@ export enum TipoPagoDb {
   TARJETA = 'TARJETA',
   BILLETERA = 'BILLETERA',
   TRANSFERENCIA = 'TRANSFERENCIA',
+  QR = 'QR',
 }
 
 @Entity({ name: 'detalle_transaccion' })
@@ -26,16 +27,16 @@ export class DetalleTransaccion {
   tipoPago!: TipoPagoDb;
 
   @Column({ name: 'ultimos_cuatro', length: 4, nullable: true })
-  ultimosCuatro!: string;
+  ultimosCuatro!: string | null;
 
   @Column({ nullable: true, type: 'int' })
   cuotas!: number;
 
   @Column({ name: 'codigo_autorizacion', nullable: true })
-  codigoAutorizacion!: string;
+  codigoAutorizacion!: string | null;
 
   @Column({ name: 'emisor_tarjeta', nullable: true })
-  emisorTarjeta!: string;
+  emisorTarjeta!: string | null;
 
   @Column({ name: 'payment_method_token', type: 'uuid', nullable: true })
   paymentMethodToken!: string | null;
