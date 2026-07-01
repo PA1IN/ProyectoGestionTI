@@ -10,10 +10,12 @@ import { TarjetaService } from '../tarjeta/tarjeta.service';
 import { TarjetaGuardada } from '../medios-pago/entities/tarjeta-guardada.entity';
 import { MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
 import { CredencialComercio } from '../comercios/entities/credencial-comercio.entity';
-import { Transaccion, EstadoTransaccionDb } from './entities/transaccion.entity';
+import { Transaccion } from './entities/transaccion.entity';
 import { HistorialTransaccion } from './entities/historial-transaccion.entity';
 import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.entity';
 import { EstadoRespuestaTransaccion } from './enums/estado-respuesta-transaccion.enum';
+import { EstadoTransaccionDb } from './enums/transaccion.enum';
+import { RabbitMqService } from '@app/rmq';
 
 describe('PagoService', () => {
   let service: PagoService;
@@ -59,6 +61,10 @@ describe('PagoService', () => {
     autorizarBanco: jest.fn(),
   };
 
+  const rmqServiceMock = {
+    publish: jest.fn(),
+  };
+
   const comerciosServiceMock = {};
 
   const transaccionRepositoryMock = {
@@ -79,6 +85,7 @@ describe('PagoService', () => {
     save: jest.fn(),
     findOne: jest.fn(),
     find: jest.fn(),
+    createQueryBuilder: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -97,6 +104,7 @@ describe('PagoService', () => {
         { provide: getRepositoryToken(DetalleTransaccion), useValue: detalleRepositoryMock },
         { provide: MediosPagoService, useValue: mediosPagoServiceMock },
         { provide: TarjetaService, useValue: tarjetaServiceMock },
+        { provide: RabbitMqService, useValue: rmqServiceMock },
         { provide: ComerciosService, useValue: comerciosServiceMock },
       ],
     }).compile();
@@ -104,6 +112,14 @@ describe('PagoService', () => {
     service = module.get<PagoService>(PagoService);
     jest.clearAllMocks();
     fetchMock.mockResolvedValue({ ok: true, status: 204 });
+    detalleRepositoryMock.createQueryBuilder.mockReturnValue({
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+    });
   });
 
   it('processTransaction debe aprobar y guardar detalle e historial', async () => {
@@ -316,6 +332,53 @@ describe('PagoService', () => {
         transactionId: 'tx-mit-2',
         idOrden: 'ORD-MIT-2',
         reason: 'Saldo insuficiente',
+      }),
+    );
+  });
+
+  it('createTransaction debe emitir alerta NOT_EQUAL cuando la orden se reutiliza con otro monto', async () => {
+    credencialComercioRepositoryMock.findOne.mockResolvedValue({
+      id: 'mc-1',
+      estado: 'ACTIVA',
+      nombreComercio: 'Demo',
+      webhookUrl: 'http://merchant.local/webhook',
+    });
+    transaccionRepositoryMock.findOne.mockResolvedValue({
+      id: 'tx-1',
+      monto: '1000.00',
+      moneda: 'CLP',
+      merchantCredentialId: 'mc-1',
+    });
+
+    await expect(service.createTransaction({
+      idOrden: 'ORD-1',
+      monto: 2000,
+      moneda: 'CLP',
+      nombreComercio: 'Demo',
+      returnUrl: 'http://localhost:3000/ok',
+    }, 'mc-1')).rejects.toThrow('El id de orden ya fue utilizado con otra solicitud');
+
+    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
+      'pagos.notificaciones.webhooks',
+      expect.objectContaining({
+        targetUrl: 'http://merchant.local/webhook',
+        payload: expect.objectContaining({
+          sistema_id: 'P04',
+          payload: expect.objectContaining({
+            error: 'NOT_EQUAL',
+            id_transaccion: 'tx-1',
+            monto_original: 1000,
+            monto_cobrado: 2000,
+          }),
+        }),
+      }),
+    );
+    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
+      'analitica.alertas.transacciones',
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          error: 'NOT_EQUAL',
+        }),
       }),
     );
   });

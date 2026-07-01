@@ -15,9 +15,10 @@ import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.e
 import { MediosPagoService } from '../medios-pago/medios-pago.service';
 import { TarjetaService } from '../tarjeta/tarjeta.service';
 import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/entities/credencial-comercio.entity';
-import { CheckoutDetail, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult, TransactionWebhookPayload } from './types/pago-response.types';
+import { CheckoutDetail, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult } from './types/pago-response.types';
 import { CheckoutPayload, TransactionPayload } from './types/pago-jwt-payload.types';
 import { BancoEstadoOperacion } from '../tarjeta/types/banco.types';
+import { RabbitMqService, TRANSACTION_ALERTS_ANALYTICS_QUEUE, TRANSACTION_WEBHOOK_QUEUE, TransactionAlertEnvelope, WebhookJob } from '@app/rmq';
 
 @Injectable()
 export class PagoService {
@@ -26,6 +27,7 @@ export class PagoService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly rmqService: RabbitMqService,
     private readonly mediosPagoService: MediosPagoService,
     private readonly tarjetaService: TarjetaService,
 
@@ -63,6 +65,20 @@ export class PagoService {
         }),
       );
 
+      await this.detalleRepository.save(
+        this.detalleRepository.create({
+          transaccion: transaccionRechazada,
+          nombreUsuario: dto.customer ?? 'MIT',
+          rut: '',
+          tipoPago: TipoPagoDb.TARJETA,
+          ultimosCuatro: cardRecord.last4,
+          cuotas: 0,
+          codigoAutorizacion: '',
+          emisorTarjeta: cardRecord.brand ?? 'UNKNOWN',
+          paymentMethodToken: dto.paymentMethodToken,
+        }),
+      );
+
       await this.historialRepository.save(
         this.historialRepository.create({
           transaccion: transaccionRechazada,
@@ -90,6 +106,12 @@ export class PagoService {
         },
         reason: 'No existe un mandato activo para este comercio',
         timestamp: new Date().toISOString(),
+      });
+
+      await this.detectarYNotificarAlertaReintentos({
+        transactionId: transaccionRechazada.id,
+        ultimosCuatro: cardRecord.last4,
+        merchantCredential,
       });
 
       return {
@@ -181,6 +203,20 @@ export class PagoService {
       transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
       await this.transaccionRepository.save(transaccion);
 
+      await this.detalleRepository.save(
+        this.detalleRepository.create({
+          transaccion,
+          nombreUsuario: dto.customer ?? 'MIT',
+          rut: '',
+          tipoPago: TipoPagoDb.TARJETA,
+          ultimosCuatro: cardRecord.last4,
+          cuotas: 0,
+          codigoAutorizacion: '',
+          emisorTarjeta: cardRecord.brand ?? 'UNKNOWN',
+          paymentMethodToken: dto.paymentMethodToken,
+        }),
+      );
+
       await this.historialRepository.save(
         this.historialRepository.create({
           transaccion,
@@ -208,6 +244,12 @@ export class PagoService {
         },
         reason: bancoRespuesta.message,
         timestamp: new Date().toISOString(),
+      });
+
+      await this.detectarYNotificarAlertaReintentos({
+        transactionId: transaccion.id,
+        ultimosCuatro: cardRecord.last4,
+        merchantCredential,
       });
 
       return {
@@ -305,6 +347,13 @@ export class PagoService {
         existingTransaction.moneda !== createTransaccionDto.moneda ||
         existingTransaction.merchantCredentialId !== merchantCredential.id
       ) {
+        await this.notificarAlertaMontoManipulado({
+          merchantCredential,
+          transactionId: existingTransaction.id,
+          montoOriginal: Number(existingTransaction.monto),
+          montoCobrado: createTransaccionDto.monto,
+        });
+
         throw new ConflictException('El id de orden ya fue utilizado con otra solicitud');
       }
 
@@ -475,6 +524,20 @@ export class PagoService {
         transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
         await this.transaccionRepository.save(transaccion);
 
+        await this.detalleRepository.save(
+          this.detalleRepository.create({
+            transaccion,
+            nombreUsuario: checkoutDto.titular ?? 'ANONIMO',
+            rut: '',
+            tipoPago: TipoPagoDb.TARJETA,
+            ultimosCuatro: last4,
+            cuotas: 0,
+            codigoAutorizacion: '',
+            emisorTarjeta: brand,
+            paymentMethodToken: null,
+          }),
+        );
+
         await this.historialRepository.save(
           this.historialRepository.create({
             transaccion,
@@ -501,6 +564,12 @@ export class PagoService {
           },
           reason: bancoRespuesta.message,
           timestamp: new Date().toISOString(),
+        });
+
+        await this.detectarYNotificarAlertaReintentos({
+          transactionId: transaccion.id,
+          ultimosCuatro: last4,
+          merchantCredential,
         });
 
         return {
@@ -609,41 +678,93 @@ export class PagoService {
     return merchantCredential;
   }
 
-  private async notificarWebhookComercio(
+  private async notificarWebhookComercio<TPayload>(
     merchantCredential: CredencialComercio,
-    payload: TransactionWebhookPayload,
+    payload: TPayload,
   ): Promise<void> {
     if (!merchantCredential.webhookUrl) {
       this.logger.debug(`Webhook omitido para ${merchantCredential.id}: no hay URL configurada`);
       return;
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    await this.rmqService.publish<WebhookJob<TPayload>>(TRANSACTION_WEBHOOK_QUEUE, {
+      targetUrl: merchantCredential.webhookUrl,
+      payload,
+    });
+  }
 
-    try {
-      const response = await fetch(merchantCredential.webhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
+  private async notificarAlertaMontoManipulado(params: {
+    merchantCredential: CredencialComercio;
+    transactionId: string;
+    montoOriginal: number;
+    montoCobrado: number;
+  }): Promise<void> {
+    const alerta: TransactionAlertEnvelope = {
+      sistema_id: this.obtenerSistemaId(),
+      creado_en: new Date().toISOString(),
+      payload: {
+        tipo: 'Transaccion',
+        error: 'NOT_EQUAL',
+        id_transaccion: params.transactionId,
+        monto_original: params.montoOriginal,
+        monto_cobrado: params.montoCobrado,
+      },
+    };
 
-      if (!response.ok) {
-        this.logger.warn(
-          `Webhook del comercio respondió con estado ${response.status} para ${merchantCredential.id}`,
-        );
-      }
-    } catch (error) {
-      this.logger.warn(
-        `No fue posible notificar el webhook del comercio ${merchantCredential.id}, url: ${merchantCredential.webhookUrl}`,
-        error instanceof Error ? error.stack : String(error),
-      );
-    } finally {
-      clearTimeout(timeoutId);
+    await this.publicarAlertaTransaccion(params.merchantCredential, alerta);
+  }
+
+  private async detectarYNotificarAlertaReintentos(params: {
+    transactionId: string;
+    ultimosCuatro: string;
+    merchantCredential: CredencialComercio;
+  }): Promise<void> {
+    const transaccionesRechazadas = await this.detalleRepository
+      .createQueryBuilder('detalle')
+      .innerJoinAndSelect('detalle.transaccion', 'transaccion')
+      .where('detalle.ultimosCuatro = :ultimosCuatro', { ultimosCuatro: params.ultimosCuatro })
+      .andWhere('transaccion.estado = :estado', { estado: EstadoTransaccionDb.RECHAZADO })
+      .andWhere('transaccion.merchantCredentialId = :merchantCredentialId', {
+        merchantCredentialId: params.merchantCredential.id,
+      })
+      .orderBy('transaccion.createdAt', 'DESC')
+      .take(3)
+      .getMany();
+
+    const idsCandidatos = [params.transactionId, ...transaccionesRechazadas.map((detalle) => detalle.transaccion.id)];
+    const transaccionesUnicas = Array.from(new Set(idsCandidatos));
+
+    if (transaccionesUnicas.length < 4) {
+      return;
     }
+
+    const alerta: TransactionAlertEnvelope = {
+      sistema_id: this.obtenerSistemaId(),
+      creado_en: new Date().toISOString(),
+      payload: {
+        tipo: 'Transaccion',
+        error: 'RETRY_WARNING',
+        ultimos_4: Number.parseInt(params.ultimosCuatro, 10),
+        cantidad: transaccionesUnicas.length,
+        transacciones: transaccionesUnicas.slice(0, 4),
+      },
+    };
+
+    await this.publicarAlertaTransaccion(params.merchantCredential, alerta);
+  }
+
+  private async publicarAlertaTransaccion(
+    merchantCredential: CredencialComercio,
+    alerta: TransactionAlertEnvelope,
+  ): Promise<void> {
+    await Promise.all([
+      this.notificarWebhookComercio(merchantCredential, alerta),
+      this.rmqService.publish<TransactionAlertEnvelope>(TRANSACTION_ALERTS_ANALYTICS_QUEUE, alerta),
+    ]);
+  }
+
+  private obtenerSistemaId(): string {
+    return this.configService.get<string>('SYSTEM_ID') || 'P04';
   }
 
   private detectarMarcaTarjeta(numeroPan: string) {

@@ -16,6 +16,7 @@ import { TarjetaGuardada } from '../medios-pago/entities/tarjeta-guardada.entity
 import { MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
 import { CredencialComercio } from '../comercios/entities/credencial-comercio.entity';
 import { PagoMerchantAuthGuard } from './guards/pago-merchant-auth.guard';
+import { RmqModule } from '@app/rmq';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { PagoMerchantAuthGuard } from './guards/pago-merchant-auth.guard';
     MediosPagoModule,
     ComerciosModule,
     TarjetaModule,
+    RmqModule,
     NestConfigModule,
     TypeOrmModule.forRootAsync({
       imports: [NestConfigModule],

@@ -7,23 +7,30 @@ export class RabbitMqService implements OnModuleDestroy {
   private readonly logger = new Logger(RabbitMqService.name);
   private connection?: any;
   private channel?: any;
+  private readonly assertedQueues = new Set<string>();
 
   constructor(private readonly configService: ConfigService) {}
 
   private async getChannel(queueName: string): Promise<any> {
-    if (this.channel) return this.channel;
-
     const rabbitMqUrl = this.configService.get<string>('RABBITMQ_URL') || 'amqp://localhost:5672';
-    this.connection = await connect(rabbitMqUrl);
-    this.channel = await this.connection.createChannel();
-    await this.channel.assertQueue(queueName, { durable: true });
+
+    if (!this.channel) {
+      this.connection = await connect(rabbitMqUrl);
+      this.channel = await this.connection.createChannel();
+    }
+
+    if (!this.assertedQueues.has(queueName)) {
+      await this.channel.assertQueue(queueName, { durable: true });
+      this.assertedQueues.add(queueName);
+    }
 
     return this.channel;
   }
 
-  async publish(queueName: string, payloadData: any): Promise<void> {
+  async publish<T>(queueName: string, payloadData: T): Promise<void> {
     try {
       const channel = await this.getChannel(queueName);
+
       channel.sendToQueue(queueName, Buffer.from(JSON.stringify(payloadData)), {
         contentType: 'application/json',
         persistent: true,
@@ -33,22 +40,19 @@ export class RabbitMqService implements OnModuleDestroy {
     }
   }
 
-  async consume(queueName: string, onMessage: (msg: any) => Promise<void>): Promise<void> {
+  async consume<T>(queueName: string, onMessage: (payload: T) => Promise<void>): Promise<void> {
     try {
       const channel = await this.getChannel(queueName);
-      this.logger.log(`Escuchando la cola: ${queueName}`);
-
       await channel.consume(queueName, async (msg: any) => {
         if (!msg) return;
         try {
-          const content = JSON.parse(msg.content.toString());
+          const content: T = JSON.parse(msg.content.toString());
           
           await onMessage(content); 
           
           channel.ack(msg);
         } catch (error) {
-          this.logger.error(`Error procesando mensaje en la cola ${queueName}`);
-          channel.nack(msg, false, false); 
+          channel.nack(msg, false, false);
         }
       }, { noAck: false });
     } catch (error) {
