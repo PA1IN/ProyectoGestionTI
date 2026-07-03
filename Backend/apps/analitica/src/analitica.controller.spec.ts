@@ -1,6 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { AnaliticaController } from './analitica.controller';
 import { AnaliticaService } from './analitica.service';
+import { AlertaHistorica } from './entities/alerta-historica.entity';
+import { RabbitMqService } from '@app/rmq';
 
 describe('AnaliticaController', () => {
   let analiticaController: AnaliticaController;
@@ -8,7 +11,11 @@ describe('AnaliticaController', () => {
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AnaliticaController],
-      providers: [AnaliticaService],
+      providers: [
+        AnaliticaService,
+        { provide: RabbitMqService, useValue: { consume: jest.fn(), publish: jest.fn() } },
+        { provide: getRepositoryToken(AlertaHistorica), useValue: { save: jest.fn(), find: jest.fn() } },
+      ],
     }).compile();
 
     analiticaController = app.get<AnaliticaController>(AnaliticaController);
