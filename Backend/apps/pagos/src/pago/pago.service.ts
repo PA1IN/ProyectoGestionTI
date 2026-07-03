@@ -1,10 +1,11 @@
 import { ConflictException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'crypto';
 import type { StringValue } from 'ms';
 import { CreateTransaccionDto } from './dto/create-transaccion.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { CheckoutDto } from './dto/checkout.dto';
 import { MitDto } from './dto/mit.dto';
 import { EstadoRespuestaTransaccion } from './enums/estado-respuesta-transaccion.enum';
@@ -18,7 +19,17 @@ import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/ent
 import { CheckoutDetail, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult } from './types/pago-response.types';
 import { CheckoutPayload, TransactionPayload } from './types/pago-jwt-payload.types';
 import { BancoEstadoOperacion } from '../tarjeta/types/banco.types';
-import { RabbitMqService, TRANSACTION_ALERTS_ANALYTICS_QUEUE, TRANSACTION_WEBHOOK_QUEUE, TransactionAlertEnvelope, WebhookJob } from '@app/rmq';
+import {
+  RabbitMqService,
+  TRANSACTION_ALERTS_ANALYTICS_QUEUE,
+  TRANSACTION_EVENTS_ANALYTICS_QUEUE,
+  TRANSACTION_WEBHOOK_QUEUE,
+  AnalyticsTransactionEventEnvelope,
+  TransactionAlertEnvelope,
+  TransactionWebhookErrorCode,
+  TransactionWebhookEvent,
+  WebhookJob,
+} from '@app/rmq';
 
 @Injectable()
 export class PagoService {
@@ -30,6 +41,7 @@ export class PagoService {
     private readonly rmqService: RabbitMqService,
     private readonly mediosPagoService: MediosPagoService,
     private readonly tarjetaService: TarjetaService,
+    private readonly dataSource: DataSource,
 
     @InjectRepository(CredencialComercio)
     private readonly credencialComercioRepository: Repository<CredencialComercio>,
@@ -52,66 +64,64 @@ export class PagoService {
     const mandato = await this.mediosPagoService.buscarMandatoPorTarjetaYComercio(dto.paymentMethodToken, merchantCredential.id);
 
     if (!mandato) {
-      const transaccionRechazada = await this.transaccionRepository.save(
-        this.transaccionRepository.create({
-          monto: dto.monto.toFixed(2),
-          moneda: dto.moneda.toUpperCase(),
-          estado: EstadoTransaccionDb.RECHAZADO,
-          idOrden: dto.idOrden,
-          tipoOperacion: TipoOperacionTransaccionDb.MIT,
-          merchantCredentialId: merchantCredential.id,
-          paymentMethodToken: dto.paymentMethodToken,
-          mandateId: null,
-        }),
-      );
+      const transactionId = randomUUID();
+      const transaccionRechazada = await this.ejecutarTransaccion(async (manager) => {
+        const transaccion = await manager.save(
+          Transaccion,
+          manager.create(Transaccion, {
+            id: transactionId,
+            monto: dto.monto.toFixed(2),
+            moneda: dto.moneda.toUpperCase(),
+            estado: EstadoTransaccionDb.RECHAZADO,
+            idOrden: dto.idOrden,
+            tipoOperacion: TipoOperacionTransaccionDb.MIT,
+            merchantCredentialId: merchantCredential.id,
+            paymentMethodToken: dto.paymentMethodToken,
+            mandateId: null,
+          }),
+        );
 
-      await this.detalleRepository.save(
-        this.detalleRepository.create({
-          transaccion: transaccionRechazada,
-          nombreUsuario: dto.customer ?? 'MIT',
-          rut: '',
-          tipoPago: TipoPagoDb.TARJETA,
-          ultimosCuatro: cardRecord.last4,
-          cuotas: 0,
-          codigoAutorizacion: '',
-          emisorTarjeta: cardRecord.brand ?? 'UNKNOWN',
-          paymentMethodToken: dto.paymentMethodToken,
-        }),
-      );
+        await manager.save(
+          DetalleTransaccion,
+          manager.create(DetalleTransaccion, {
+            transaccion,
+            nombreUsuario: dto.customer ?? 'MIT',
+            rut: '',
+            tipoPago: TipoPagoDb.TARJETA,
+            ultimosCuatro: cardRecord.last4,
+            cuotas: 0,
+            codigoAutorizacion: '',
+            emisorTarjeta: cardRecord.brand ?? 'UNKNOWN',
+            paymentMethodToken: dto.paymentMethodToken,
+          }),
+        );
 
-      await this.historialRepository.save(
-        this.historialRepository.create({
-          transaccion: transaccionRechazada,
-          statusFrom: EstadoTransaccionDb.PENDIENTE,
-          statusTo: EstadoTransaccionDb.RECHAZADO,
-        }),
-      );
+        await manager.save(
+          HistorialTransaccion,
+          manager.create(HistorialTransaccion, {
+            transaccion,
+            statusFrom: EstadoTransaccionDb.PENDIENTE,
+            statusTo: EstadoTransaccionDb.RECHAZADO,
+          }),
+        );
 
-      await this.notificarWebhookComercio(merchantCredential, {
-        event: 'transaction.rejected',
-        transactionId: transaccionRechazada.id,
-        idOrden: dto.idOrden,
-        operationType: 'MIT',
-        status: EstadoRespuestaTransaccion.RECHAZADO,
-        monto: dto.monto,
-        moneda: dto.moneda.toUpperCase(),
-        mandateId: null,
-        paymentMethodToken: dto.paymentMethodToken,
-        customer: dto.customer,
-        card: {
-          brand: cardRecord.brand,
-          last4: cardRecord.last4,
-          expMonth: cardRecord.expMonth,
-          expYear: cardRecord.expYear,
-        },
-        reason: 'No existe un mandato activo para este comercio',
-        timestamp: new Date().toISOString(),
+        return transaccion;
       });
 
-      await this.detectarYNotificarAlertaReintentos({
-        transactionId: transaccionRechazada.id,
-        ultimosCuatro: cardRecord.last4,
+      await this.publicarEventoTransaccion({
         merchantCredential,
+        eventType: 'intento_pago',
+        transactionId,
+        orderId: dto.idOrden,
+        subscriptionId: null,
+        monto: dto.monto,
+        moneda: dto.moneda.toUpperCase(),
+        tokenTransaccion: cardRecord.id,
+        approved: false,
+        codigoError: 'NO_MANDATE',
+        paymentMethodLast4: cardRecord.last4,
+        operationType: 'MIT',
+        publishExternal: true,
       });
 
       return {
@@ -178,18 +188,34 @@ export class PagoService {
       };
     }
 
-    const transaccion = await this.transaccionRepository.save(
-      this.transaccionRepository.create({
-        monto: dto.monto.toFixed(2),
-        moneda: dto.moneda.toUpperCase(),
-        estado: EstadoTransaccionDb.PENDIENTE,
-        idOrden: dto.idOrden,
-        tipoOperacion: TipoOperacionTransaccionDb.MIT,
-        merchantCredentialId: merchantCredential.id,
-        paymentMethodToken: dto.paymentMethodToken,
-        mandateId: mandato.id,
-      }),
-    );
+    const transactionId = randomUUID();
+    const transaccionBase = {
+      id: transactionId,
+      monto: dto.monto.toFixed(2),
+      moneda: dto.moneda.toUpperCase(),
+      estado: EstadoTransaccionDb.PENDIENTE,
+      idOrden: dto.idOrden,
+      tipoOperacion: TipoOperacionTransaccionDb.MIT,
+      merchantCredentialId: merchantCredential.id,
+      paymentMethodToken: dto.paymentMethodToken,
+      mandateId: mandato.id,
+    };
+
+    await this.publicarEventoTransaccion({
+      merchantCredential,
+      eventType: 'intento_pago',
+      transactionId,
+      orderId: dto.idOrden,
+      subscriptionId: mandato.id,
+      monto: dto.monto,
+      moneda: dto.moneda.toUpperCase(),
+      tokenTransaccion: cardRecord.id,
+      approved: false,
+      codigoError: null,
+      paymentMethodLast4: cardRecord.last4,
+      operationType: 'MIT',
+      publishExternal: true,
+    });
 
     const bancoRespuesta = await this.tarjetaService.autorizarBanco({
       numero: cardRecord.numeroPan,
@@ -198,64 +224,74 @@ export class PagoService {
       monto: dto.monto,
     });
 
-    if (bancoRespuesta.estado === BancoEstadoOperacion.RECHAZADA) {
-      transaccion.estado = EstadoTransaccionDb.RECHAZADO;
-      transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
-      await this.transaccionRepository.save(transaccion);
+    const estadoFinal = bancoRespuesta.estado === BancoEstadoOperacion.RECHAZADA
+      ? EstadoTransaccionDb.RECHAZADO
+      : EstadoTransaccionDb.APROBADO;
 
-      await this.detalleRepository.save(
-        this.detalleRepository.create({
-          transaccion,
+    const transaccionFinal = await this.ejecutarTransaccion(async (manager) => {
+      const transaccionActualizada = await manager.save(
+        Transaccion,
+        manager.create(Transaccion, {
+          ...transaccionBase,
+          estado: estadoFinal,
+          rrn: Math.floor(100000 + Math.random() * 900000),
+          tipoOperacion: TipoOperacionTransaccionDb.MIT,
+          paymentMethodToken: dto.paymentMethodToken,
+          mandateId: mandato.id,
+          merchantCredentialId: merchantCredential.id,
+        }),
+      );
+
+      await manager.save(
+        DetalleTransaccion,
+        manager.create(DetalleTransaccion, {
+          transaccion: transaccionActualizada,
           nombreUsuario: dto.customer ?? 'MIT',
           rut: '',
           tipoPago: TipoPagoDb.TARJETA,
           ultimosCuatro: cardRecord.last4,
-          cuotas: 0,
-          codigoAutorizacion: '',
+          cuotas: estadoFinal === EstadoTransaccionDb.APROBADO ? 1 : 0,
+          codigoAutorizacion: estadoFinal === EstadoTransaccionDb.APROBADO
+            ? Math.random().toString(36).substring(2, 8).toUpperCase()
+            : '',
           emisorTarjeta: cardRecord.brand ?? 'UNKNOWN',
           paymentMethodToken: dto.paymentMethodToken,
         }),
       );
 
-      await this.historialRepository.save(
-        this.historialRepository.create({
-          transaccion,
+      await manager.save(
+        HistorialTransaccion,
+        manager.create(HistorialTransaccion, {
+          transaccion: transaccionActualizada,
           statusFrom: EstadoTransaccionDb.PENDIENTE,
-          statusTo: EstadoTransaccionDb.RECHAZADO,
+          statusTo: estadoFinal,
         }),
       );
 
-      await this.notificarWebhookComercio(merchantCredential, {
-        event: 'transaction.rejected',
-        transactionId: transaccion.id,
-        idOrden: dto.idOrden,
-        operationType: 'MIT',
-        status: EstadoRespuestaTransaccion.RECHAZADO,
+      return transaccionActualizada;
+    });
+
+    if (estadoFinal === EstadoTransaccionDb.RECHAZADO) {
+      await this.publicarEventoTransaccion({
+        merchantCredential,
+        eventType: 'confirmar_pago',
+        transactionId: transaccionFinal.id,
+        orderId: dto.idOrden,
+        subscriptionId: mandato.id,
         monto: dto.monto,
         moneda: dto.moneda.toUpperCase(),
-        mandateId: mandato.id,
-        paymentMethodToken: dto.paymentMethodToken,
-        customer: dto.customer,
-        card: {
-          brand: cardRecord.brand,
-          last4: cardRecord.last4,
-          expMonth: cardRecord.expMonth,
-          expYear: cardRecord.expYear,
-        },
-        reason: bancoRespuesta.message,
-        timestamp: new Date().toISOString(),
-      });
-
-      await this.detectarYNotificarAlertaReintentos({
-        transactionId: transaccion.id,
-        ultimosCuatro: cardRecord.last4,
-        merchantCredential,
+        tokenTransaccion: cardRecord.id,
+        approved: false,
+        codigoError: this.normalizarCodigoErrorWebhook(bancoRespuesta.message),
+        paymentMethodLast4: cardRecord.last4,
+        operationType: 'MIT',
+        publishExternal: true,
       });
 
       return {
         status: EstadoRespuestaTransaccion.RECHAZADO,
         message: bancoRespuesta.message,
-        transactionId: transaccion.id,
+        transactionId: transaccionFinal.id,
         paymentMethodToken: dto.paymentMethodToken,
         mandateId: mandato.id,
         card: {
@@ -268,56 +304,26 @@ export class PagoService {
       };
     }
 
-    transaccion.estado = EstadoTransaccionDb.APROBADO;
-    transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
-    await this.transaccionRepository.save(transaccion);
-
-    await this.detalleRepository.save(
-      this.detalleRepository.create({
-        transaccion,
-        nombreUsuario: dto.customer ?? 'MIT',
-        rut: '',
-        tipoPago: TipoPagoDb.TARJETA,
-        ultimosCuatro: cardRecord.last4,
-        cuotas: 1,
-        codigoAutorizacion: Math.random().toString(36).substring(2, 8).toUpperCase(),
-        emisorTarjeta: cardRecord.brand ?? 'UNKNOWN',
-        paymentMethodToken: dto.paymentMethodToken,
-      }),
-    );
-
-    await this.historialRepository.save(
-      this.historialRepository.create({
-        transaccion,
-        statusFrom: EstadoTransaccionDb.PENDIENTE,
-        statusTo: EstadoTransaccionDb.APROBADO,
-      }),
-    );
-
-    await this.notificarWebhookComercio(merchantCredential, {
-      event: 'transaction.approved',
-      transactionId: transaccion.id,
-      idOrden: dto.idOrden,
-      operationType: 'MIT',
-      status: EstadoRespuestaTransaccion.APROBADO,
+    await this.publicarEventoTransaccion({
+      merchantCredential,
+      eventType: 'confirmar_pago',
+      transactionId: transaccionFinal.id,
+      orderId: dto.idOrden,
+      subscriptionId: mandato.id,
       monto: dto.monto,
       moneda: dto.moneda.toUpperCase(),
-      mandateId: mandato.id,
-      paymentMethodToken: dto.paymentMethodToken,
-      customer: dto.customer,
-      card: {
-        brand: cardRecord.brand,
-        last4: cardRecord.last4,
-        expMonth: cardRecord.expMonth,
-        expYear: cardRecord.expYear,
-      },
-      timestamp: new Date().toISOString(),
+      tokenTransaccion: cardRecord.id,
+      approved: true,
+      codigoError: null,
+      paymentMethodLast4: cardRecord.last4,
+      operationType: 'MIT',
+      publishExternal: true,
     });
 
     return {
       status: EstadoRespuestaTransaccion.APROBADO,
       message: 'Suscripcion procesada correctamente',
-      transactionId: transaccion.id,
+      transactionId: transaccionFinal.id,
       paymentMethodToken: dto.paymentMethodToken,
       mandateId: mandato.id,
       card: {
@@ -347,7 +353,7 @@ export class PagoService {
         existingTransaction.moneda !== createTransaccionDto.moneda ||
         existingTransaction.merchantCredentialId !== merchantCredential.id
       ) {
-        await this.notificarAlertaMontoManipulado({
+        await this.publicarAlertaMontoManipulado({
           merchantCredential,
           transactionId: existingTransaction.id,
           montoOriginal: Number(existingTransaction.monto),
@@ -378,20 +384,20 @@ export class PagoService {
       };
     }
 
-    const transaccion = await this.transaccionRepository.save(
-      this.transaccionRepository.create({
-        monto: createTransaccionDto.monto.toFixed(2),
-        moneda: createTransaccionDto.moneda,
-        estado: EstadoTransaccionDb.PENDIENTE,
-        idOrden: createTransaccionDto.idOrden,
-        tipoOperacion: TipoOperacionTransaccionDb.CIT,
-        merchantCredentialId: merchantCredential.id,
-      }),
-    );
+    const transactionId = randomUUID();
+    const transaccionBase = {
+      id: transactionId,
+      monto: createTransaccionDto.monto.toFixed(2),
+      moneda: createTransaccionDto.moneda,
+      estado: EstadoTransaccionDb.PENDIENTE,
+      idOrden: createTransaccionDto.idOrden,
+      tipoOperacion: TipoOperacionTransaccionDb.CIT,
+      merchantCredentialId: merchantCredential.id,
+    };
 
     const payload: TransactionPayload = {
-      transactionId: transaccion.id,
-      idOrden: transaccion.idOrden,
+      transactionId,
+      idOrden: createTransaccionDto.idOrden,
       monto: createTransaccionDto.monto,
       moneda: createTransaccionDto.moneda,
       nombreComercio: merchantCredential.nombreComercio,
@@ -402,10 +408,25 @@ export class PagoService {
     const token = await this.jwtService.signAsync(payload, { expiresIn });
     const transactionUrl = `${frontendUrl}/checkout/${encodeURIComponent(token)}`;
 
+    await this.publicarEventoTransaccion({
+      merchantCredential,
+      eventType: 'intento_pago',
+      transactionId,
+      orderId: createTransaccionDto.idOrden,
+      monto: createTransaccionDto.monto,
+      moneda: createTransaccionDto.moneda,
+      tokenTransaccion: token,
+      approved: false,
+      codigoError: null,
+      paymentMethodLast4: null,
+      operationType: 'CIT',
+      publishExternal: true,
+    });
+
     return {
       token,
       transactionUrl,
-      transactionId: transaccion.id,
+      transactionId,
       tokenType: 'Bearer',
       expiresIn: expiresInRaw,
     };
@@ -519,64 +540,86 @@ export class PagoService {
         monto: payload.monto,
       });
 
-      if (bancoRespuesta.estado === BancoEstadoOperacion.RECHAZADA) {
-        transaccion.estado = EstadoTransaccionDb.RECHAZADO;
-        transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
-        await this.transaccionRepository.save(transaccion);
+      const estadoFinal = bancoRespuesta.estado === BancoEstadoOperacion.RECHAZADA
+        ? EstadoTransaccionDb.RECHAZADO
+        : EstadoTransaccionDb.APROBADO;
+      const citTransactionId = randomUUID();
+      const transaccionBase = {
+        id: citTransactionId,
+        monto: payload.monto.toFixed(2),
+        moneda: payload.moneda,
+        estado: EstadoTransaccionDb.PENDIENTE,
+        idOrden: payload.idOrden,
+        tipoOperacion: TipoOperacionTransaccionDb.CIT,
+        merchantCredentialId: merchantCredential.id,
+        paymentMethodToken: null,
+        mandateId: null,
+      };
 
-        await this.detalleRepository.save(
-          this.detalleRepository.create({
-            transaccion,
+      const transaccionFinal = await this.ejecutarTransaccion<Transaccion>(async (manager) => {
+        const transaccionActualizada = await manager.save(
+          Transaccion,
+          manager.create(Transaccion, {
+            ...transaccionBase,
+            estado: estadoFinal,
+            rrn: Math.floor(100000 + Math.random() * 900000),
+            tipoOperacion: TipoOperacionTransaccionDb.CIT,
+            paymentMethodToken: null,
+            mandateId: null,
+            merchantCredentialId: merchantCredential.id,
+          }),
+        );
+
+        await manager.save(
+          DetalleTransaccion,
+          manager.create(DetalleTransaccion, {
+            transaccion: transaccionActualizada,
             nombreUsuario: checkoutDto.titular ?? 'ANONIMO',
             rut: '',
             tipoPago: TipoPagoDb.TARJETA,
             ultimosCuatro: last4,
-            cuotas: 0,
-            codigoAutorizacion: '',
+            cuotas: estadoFinal === EstadoTransaccionDb.APROBADO ? 1 : 0,
+            codigoAutorizacion: estadoFinal === EstadoTransaccionDb.APROBADO
+              ? Math.random().toString(36).substring(2, 8).toUpperCase()
+              : '',
             emisorTarjeta: brand,
             paymentMethodToken: null,
           }),
         );
 
-        await this.historialRepository.save(
-          this.historialRepository.create({
-            transaccion,
+        await manager.save(
+          HistorialTransaccion,
+          manager.create(HistorialTransaccion, {
+            transaccion: transaccionActualizada,
             statusFrom: previousStatus,
-            statusTo: EstadoTransaccionDb.RECHAZADO,
+            statusTo: estadoFinal,
           }),
         );
 
-        const [rejectedExpMonth, rejectedExpYear] = this.parseFechaExpiracion(checkoutDto.fechaExpiracion);
+        return transaccionActualizada;
+      });
 
-        await this.notificarWebhookComercio(merchantCredential, {
-          event: 'transaction.rejected',
-          transactionId: transaccion.id,
-          idOrden: payload.idOrden,
-          operationType: 'CIT',
-          status: EstadoRespuestaTransaccion.RECHAZADO,
+      if (estadoFinal === EstadoTransaccionDb.RECHAZADO) {
+        await this.publicarEventoTransaccion({
+          merchantCredential,
+          eventType: 'confirmar_pago',
+          transactionId: transaccionFinal.id,
+          orderId: payload.idOrden,
           monto: payload.monto,
           moneda: payload.moneda,
-          card: {
-            brand,
-            last4,
-            expMonth: rejectedExpMonth,
-            expYear: rejectedExpYear,
-          },
-          reason: bancoRespuesta.message,
-          timestamp: new Date().toISOString(),
-        });
-
-        await this.detectarYNotificarAlertaReintentos({
-          transactionId: transaccion.id,
-          ultimosCuatro: last4,
-          merchantCredential,
+          tokenTransaccion: token,
+          approved: false,
+          codigoError: this.normalizarCodigoErrorWebhook(bancoRespuesta.message),
+          paymentMethodLast4: last4,
+          operationType: 'CIT',
+          publishExternal: true,
         });
 
         return {
           status: EstadoRespuestaTransaccion.RECHAZADO,
           message: bancoRespuesta.message,
-          redirectUrl: `${payload.returnUrl}?status=RECHAZADO&transactionId=${transaccion.id}`,
-          transactionId: transaccion.id,
+          redirectUrl: `${payload.returnUrl}?status=RECHAZADO&transactionId=${transaccionFinal.id}`,
+          transactionId: transaccionFinal.id,
           details: {
             monto: payload.monto,
             moneda: payload.moneda,
@@ -585,63 +628,29 @@ export class PagoService {
         };
       }
 
-      const status = EstadoRespuestaTransaccion.APROBADO;
-
-      await this.detalleRepository.save(
-        this.detalleRepository.create({
-          transaccion,
-          nombreUsuario: checkoutDto.titular ?? 'ANONIMO',
-          rut: '',
-          tipoPago: TipoPagoDb.TARJETA,
-          ultimosCuatro: last4,
-          cuotas: status === EstadoRespuestaTransaccion.APROBADO ? 1 : 0,
-          codigoAutorizacion: Math.random().toString(36).substring(2, 8).toUpperCase(),
-          emisorTarjeta: brand,
-          paymentMethodToken: null,
-        }),
-      );
-
-      transaccion.estado = status === EstadoRespuestaTransaccion.APROBADO ? EstadoTransaccionDb.APROBADO : EstadoTransaccionDb.RECHAZADO;
-      transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
-      transaccion.tipoOperacion = TipoOperacionTransaccionDb.CIT;
-      transaccion.paymentMethodToken = null;
-      transaccion.mandateId = null;
-      transaccion.merchantCredentialId = merchantCredential.id;
-      await this.transaccionRepository.save(transaccion);
-
-      await this.historialRepository.save(
-        this.historialRepository.create({
-          transaccion,
-          statusFrom: previousStatus,
-          statusTo: status === EstadoRespuestaTransaccion.APROBADO ? EstadoTransaccionDb.APROBADO : EstadoTransaccionDb.RECHAZADO,
-        }),
-      );
-
-      await this.notificarWebhookComercio(merchantCredential, {
-        event: 'transaction.approved',
-        transactionId: transaccion.id,
-        idOrden: payload.idOrden,
-        operationType: 'CIT',
-        status: EstadoRespuestaTransaccion.APROBADO,
+      await this.publicarEventoTransaccion({
+        merchantCredential,
+        eventType: 'confirmar_pago',
+        transactionId: transaccionFinal.id,
+        orderId: payload.idOrden,
         monto: payload.monto,
         moneda: payload.moneda,
-        card: {
-          brand,
-          last4,
-          expMonth,
-          expYear,
-        },
-        timestamp: new Date().toISOString(),
+        tokenTransaccion: token,
+        approved: true,
+        codigoError: null,
+        paymentMethodLast4: last4,
+        operationType: 'CIT',
+        publishExternal: true,
       });
 
-      const isApproved = status === EstadoRespuestaTransaccion.APROBADO;
-      const transactionId = transaccion.id;
+      const isApproved = estadoFinal === EstadoTransaccionDb.APROBADO;
+      const finalTransactionId = transaccionFinal.id;
 
       return {
-        status,
+        status: isApproved ? EstadoRespuestaTransaccion.APROBADO : EstadoRespuestaTransaccion.RECHAZADO,
         message: isApproved ? 'Transacción aprobada' : 'Transacción rechazada',
-        redirectUrl: `${payload.returnUrl}?status=${status}&transactionId=${transactionId}`,
-        transactionId,
+        redirectUrl: `${payload.returnUrl}?status=${isApproved ? EstadoRespuestaTransaccion.APROBADO : EstadoRespuestaTransaccion.RECHAZADO}&transactionId=${finalTransactionId}`,
+        transactionId: finalTransactionId,
         details: {
           monto: payload.monto,
           moneda: payload.moneda,
@@ -687,13 +696,99 @@ export class PagoService {
       return;
     }
 
-    await this.rmqService.publish<WebhookJob<TPayload>>(TRANSACTION_WEBHOOK_QUEUE, {
-      targetUrl: merchantCredential.webhookUrl,
-      payload,
-    });
+    try {
+      await this.rmqService.publish<WebhookJob<TPayload>>(TRANSACTION_WEBHOOK_QUEUE, {
+        targetUrl: merchantCredential.webhookUrl,
+        payload,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo notificar webhook para ${merchantCredential.id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
-  private async notificarAlertaMontoManipulado(params: {
+  private async publicarEventoTransaccion(params: {
+    merchantCredential: CredencialComercio;
+    eventType: 'intento_pago' | 'confirmar_pago';
+    transactionId: string;
+    orderId: string | null;
+    subscriptionId?: string | null;
+    monto: number;
+    moneda: string;
+    tokenTransaccion: string;
+    approved: boolean;
+    codigoError: string | null;
+    paymentMethodLast4: string | null;
+    operationType: 'CIT' | 'MIT';
+    publishExternal?: boolean;
+  }): Promise<void> {
+    const timestampEvento = new Date().toISOString();
+
+    const analyticsEvent: AnalyticsTransactionEventEnvelope = {
+      source: 'payments',
+      event_type: params.eventType,
+      payload: {
+        transaction_id: params.transactionId,
+        order_id: params.orderId,
+        merchant_credential_id: params.merchantCredential.id,
+        webhook_url: params.merchantCredential.webhookUrl ?? null,
+        subscription_id: params.subscriptionId ?? null,
+        monto: params.monto,
+        moneda: params.moneda,
+        token_transaccion: params.tokenTransaccion,
+        payment_method_last4: params.paymentMethodLast4,
+        approved: params.approved,
+        codigo_error: params.codigoError,
+        operation_type: params.operationType,
+        timestamp_evento: timestampEvento,
+      },
+    };
+
+    await this.publicarEnRabbitSeguro(TRANSACTION_EVENTS_ANALYTICS_QUEUE, analyticsEvent);
+
+    if (params.publishExternal && params.merchantCredential.webhookUrl) {
+      const externalPayload: TransactionWebhookEvent = params.eventType === 'confirmar_pago'
+        ? {
+            source: 'payments',
+            event_type: 'confirmar_pago',
+            payload: {
+              transaction_id: params.transactionId,
+              order_id: params.orderId,
+              ...(params.subscriptionId ? { subscription_id: params.subscriptionId } : {}),
+              approved: params.approved,
+              codigo_error: params.codigoError as TransactionWebhookErrorCode | null,
+              token_transaccion: params.tokenTransaccion,
+              timestamp_evento: timestampEvento,
+            },
+          }
+        : {
+            source: 'payments',
+            event_type: 'intento_pago',
+            payload: {
+              transaction_id: params.transactionId,
+              order_id: params.orderId,
+              ...(params.subscriptionId ? { subscription_id: params.subscriptionId } : {}),
+              monto: params.monto,
+              token_transaccion: params.tokenTransaccion,
+              timestamp_evento: timestampEvento,
+            },
+          };
+
+      await this.notificarWebhookComercio(params.merchantCredential, externalPayload);
+    }
+  }
+
+  private normalizarCodigoErrorWebhook(message: string | null): 'insufficient_funds' | 'rejected' {
+    if (message && /saldo insuficiente/i.test(message)) {
+      return 'insufficient_funds';
+    }
+
+    return 'rejected';
+  }
+
+  private async publicarAlertaMontoManipulado(params: {
     merchantCredential: CredencialComercio;
     transactionId: string;
     montoOriginal: number;
@@ -711,56 +806,39 @@ export class PagoService {
       },
     };
 
-    await this.publicarAlertaTransaccion(params.merchantCredential, alerta);
-  }
-
-  private async detectarYNotificarAlertaReintentos(params: {
-    transactionId: string;
-    ultimosCuatro: string;
-    merchantCredential: CredencialComercio;
-  }): Promise<void> {
-    const transaccionesRechazadas = await this.detalleRepository
-      .createQueryBuilder('detalle')
-      .innerJoinAndSelect('detalle.transaccion', 'transaccion')
-      .where('detalle.ultimosCuatro = :ultimosCuatro', { ultimosCuatro: params.ultimosCuatro })
-      .andWhere('transaccion.estado = :estado', { estado: EstadoTransaccionDb.RECHAZADO })
-      .andWhere('transaccion.merchantCredentialId = :merchantCredentialId', {
-        merchantCredentialId: params.merchantCredential.id,
-      })
-      .orderBy('transaccion.createdAt', 'DESC')
-      .take(3)
-      .getMany();
-
-    const idsCandidatos = [params.transactionId, ...transaccionesRechazadas.map((detalle) => detalle.transaccion.id)];
-    const transaccionesUnicas = Array.from(new Set(idsCandidatos));
-
-    if (transaccionesUnicas.length < 4) {
-      return;
-    }
-
-    const alerta: TransactionAlertEnvelope = {
-      sistema_id: this.obtenerSistemaId(),
-      creado_en: new Date().toISOString(),
-      payload: {
-        tipo: 'Transaccion',
-        error: 'RETRY_WARNING',
-        ultimos_4: Number.parseInt(params.ultimosCuatro, 10),
-        cantidad: transaccionesUnicas.length,
-        transacciones: transaccionesUnicas.slice(0, 4),
-      },
-    };
-
-    await this.publicarAlertaTransaccion(params.merchantCredential, alerta);
-  }
-
-  private async publicarAlertaTransaccion(
-    merchantCredential: CredencialComercio,
-    alerta: TransactionAlertEnvelope,
-  ): Promise<void> {
     await Promise.all([
-      this.notificarWebhookComercio(merchantCredential, alerta),
-      this.rmqService.publish<TransactionAlertEnvelope>(TRANSACTION_ALERTS_ANALYTICS_QUEUE, alerta),
+      this.notificarWebhookComercio(params.merchantCredential, alerta),
+      this.publicarEnRabbitSeguro(TRANSACTION_ALERTS_ANALYTICS_QUEUE, alerta),
     ]);
+  }
+
+  private async publicarEnRabbitSeguro<T>(queueName: string, payload: T): Promise<void> {
+    try {
+      await this.rmqService.publish<T>(queueName, payload);
+    } catch (error) {
+      this.logger.warn(
+        `Publicación omitida en ${queueName}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
+
+  private async ejecutarTransaccion<T>(trabajo: (manager: EntityManager) => Promise<T>): Promise<T> {
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const resultado = await trabajo(queryRunner.manager);
+      await queryRunner.commitTransaction();
+      return resultado;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   private obtenerSistemaId(): string {

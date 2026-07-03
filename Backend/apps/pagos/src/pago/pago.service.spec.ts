@@ -16,6 +16,7 @@ import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.e
 import { EstadoRespuestaTransaccion } from './enums/estado-respuesta-transaccion.enum';
 import { EstadoTransaccionDb } from './enums/transaccion.enum';
 import { RabbitMqService } from '@app/rmq';
+import { DataSource } from 'typeorm';
 
 describe('PagoService', () => {
   let service: PagoService;
@@ -88,6 +89,38 @@ describe('PagoService', () => {
     createQueryBuilder: jest.fn(),
   };
 
+  const queryRunnerMock = {
+    connect: jest.fn(),
+    startTransaction: jest.fn(),
+    commitTransaction: jest.fn(),
+    rollbackTransaction: jest.fn(),
+    release: jest.fn(),
+    manager: {
+      create: jest.fn((entity: any, value: any) => value),
+      save: jest.fn(async (entity: any, value: any) => {
+        if (entity === Transaccion || entity?.name === 'Transaccion') {
+          const idByOrder: Record<string, string> = {
+            'ORD-1': 'tx-1',
+            'ORD-2': 'tx-2',
+            'ORD-MIT-1': 'tx-mit-1',
+            'ORD-MIT-2': 'tx-mit-2',
+          };
+
+          return {
+            ...value,
+            id: value.id ?? idByOrder[value.idOrden] ?? `tx-${value.idOrden}`,
+          };
+        }
+
+        return value;
+      }),
+    },
+  };
+
+  const dataSourceMock = {
+    createQueryRunner: jest.fn(() => queryRunnerMock),
+  };
+
   beforeEach(async () => {
     (globalThis as any).fetch = fetchMock;
     (global as any).fetch = fetchMock;
@@ -105,6 +138,7 @@ describe('PagoService', () => {
         { provide: MediosPagoService, useValue: mediosPagoServiceMock },
         { provide: TarjetaService, useValue: tarjetaServiceMock },
         { provide: RabbitMqService, useValue: rmqServiceMock },
+        { provide: DataSource, useValue: dataSourceMock },
         { provide: ComerciosService, useValue: comerciosServiceMock },
       ],
     }).compile();
@@ -135,7 +169,6 @@ describe('PagoService', () => {
     });
     transaccionRepositoryMock.findOne.mockResolvedValue({ id: 'tx-1', estado: EstadoTransaccionDb.PENDIENTE, idOrden: 'ORD-1', merchantCredentialId: 'mc-1' });
     credencialComercioRepositoryMock.findOne.mockResolvedValue({ id: 'mc-1', estado: 'ACTIVA', nombreComercio: 'Demo', webhookUrl: 'http://merchant.local/webhook' });
-    const webhookSpy = jest.spyOn(service as any, 'notificarWebhookComercio').mockResolvedValue(undefined);
     tarjetaServiceMock.autorizarBanco.mockResolvedValue({
       estado: 'APROBADA',
       message: 'Pago aprobado por saldo suficiente',
@@ -171,16 +204,32 @@ describe('PagoService', () => {
     expect(tarjetaServiceMock.autorizarBanco).toHaveBeenCalled();
     expect(mediosPagoServiceMock.guardarTarjeta).not.toHaveBeenCalled();
     expect(historialRepositoryMock.save).toHaveBeenCalled();
-    expect(webhookSpy).toHaveBeenCalledWith(
+    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
+      'analitica.eventos.transacciones',
       expect.objectContaining({
-        id: 'mc-1',
-        webhookUrl: 'http://merchant.local/webhook',
+        source: 'payments',
+        event_type: 'confirmar_pago',
+        payload: expect.objectContaining({
+          transaction_id: 'tx-1',
+          order_id: 'ORD-1',
+          approved: true,
+          codigo_error: null,
+          token_transaccion: 'jwt-token',
+        }),
       }),
+    );
+    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
+      'pagos.notificaciones.webhooks',
       expect.objectContaining({
-        event: 'transaction.approved',
-        operationType: 'CIT',
-        transactionId: 'tx-1',
-        idOrden: 'ORD-1',
+        targetUrl: 'http://merchant.local/webhook',
+        payload: expect.objectContaining({
+          source: 'payments',
+          event_type: 'confirmar_pago',
+          payload: expect.objectContaining({
+            approved: true,
+            codigo_error: null,
+          }),
+        }),
       }),
     );
     expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
@@ -199,7 +248,6 @@ describe('PagoService', () => {
     });
     transaccionRepositoryMock.findOne.mockResolvedValue({ id: 'tx-2', estado: EstadoTransaccionDb.PENDIENTE, idOrden: 'ORD-2', merchantCredentialId: 'mc-1' });
     credencialComercioRepositoryMock.findOne.mockResolvedValue({ id: 'mc-1', estado: 'ACTIVA', nombreComercio: 'Demo', webhookUrl: 'http://merchant.local/webhook' });
-    const webhookSpy = jest.spyOn(service as any, 'notificarWebhookComercio').mockResolvedValue(undefined);
     tarjetaServiceMock.autorizarBanco.mockResolvedValue({
       estado: 'RECHAZADA',
       message: 'Tarjeta rechazada por saldo insuficiente',
@@ -214,20 +262,31 @@ describe('PagoService', () => {
     });
 
     expect(result.status).toBe(EstadoRespuestaTransaccion.RECHAZADO);
-    expect(webhookSpy).toHaveBeenCalledWith(
+    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
+      'analitica.eventos.transacciones',
       expect.objectContaining({
-        id: 'mc-1',
-        webhookUrl: 'http://merchant.local/webhook',
+        event_type: 'confirmar_pago',
+        payload: expect.objectContaining({
+          transaction_id: 'tx-2',
+          order_id: 'ORD-2',
+          approved: false,
+          codigo_error: 'insufficient_funds',
+          token_transaccion: 'jwt-token',
+        }),
       }),
+    );
+    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
+      'pagos.notificaciones.webhooks',
       expect.objectContaining({
-        event: 'transaction.rejected',
-        operationType: 'CIT',
-        transactionId: 'tx-2',
-        idOrden: 'ORD-2',
-        reason: 'Tarjeta rechazada por saldo insuficiente',
-        card: expect.objectContaining({
-          expMonth: 12,
-          expYear: 2028,
+        targetUrl: 'http://merchant.local/webhook',
+        payload: expect.objectContaining({
+          source: 'payments',
+          event_type: 'confirmar_pago',
+          payload: expect.objectContaining({
+            approved: false,
+            codigo_error: 'insufficient_funds',
+            token_transaccion: 'jwt-token',
+          }),
         }),
       }),
     );
@@ -241,6 +300,7 @@ describe('PagoService', () => {
       webhookUrl: 'http://merchant.local/webhook',
     });
     mediosPagoServiceMock.buscarTarjetaPorToken.mockResolvedValue({
+      id: 'card-1',
       brand: 'VISA',
       last4: '4444',
       expMonth: 12,
@@ -250,7 +310,6 @@ describe('PagoService', () => {
     });
     mediosPagoServiceMock.buscarMandatoPorTarjetaYComercio.mockResolvedValue({ id: 'md-1' });
     transaccionRepositoryMock.findOne.mockResolvedValue(null);
-    const webhookSpy = jest.spyOn(service as any, 'notificarWebhookComercio').mockResolvedValue(undefined);
     tarjetaServiceMock.autorizarBanco.mockResolvedValue({
       estado: 'APROBADA',
       message: 'Pago aprobado',
@@ -270,16 +329,31 @@ describe('PagoService', () => {
     }, 'mc-1');
 
     expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
-    expect(webhookSpy).toHaveBeenCalledWith(
+    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
+      'analitica.eventos.transacciones',
       expect.objectContaining({
-        id: 'mc-1',
-        webhookUrl: 'http://merchant.local/webhook',
+        event_type: 'intento_pago',
+        payload: expect.objectContaining({
+          transaction_id: 'tx-mit-1',
+          order_id: 'ORD-MIT-1',
+          subscription_id: 'md-1',
+          token_transaccion: 'card-1',
+          approved: false,
+        }),
       }),
+    );
+    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
+      'pagos.notificaciones.webhooks',
       expect.objectContaining({
-        event: 'transaction.approved',
-        operationType: 'MIT',
-        transactionId: 'tx-mit-1',
-        idOrden: 'ORD-MIT-1',
+        targetUrl: 'http://merchant.local/webhook',
+        payload: expect.objectContaining({
+          event_type: 'confirmar_pago',
+          payload: expect.objectContaining({
+            approved: true,
+            subscription_id: 'md-1',
+            token_transaccion: 'card-1',
+          }),
+        }),
       }),
     );
   });
@@ -292,6 +366,7 @@ describe('PagoService', () => {
       webhookUrl: 'http://merchant.local/webhook',
     });
     mediosPagoServiceMock.buscarTarjetaPorToken.mockResolvedValue({
+      id: 'card-2',
       brand: 'VISA',
       last4: '4444',
       expMonth: 12,
@@ -301,7 +376,6 @@ describe('PagoService', () => {
     });
     mediosPagoServiceMock.buscarMandatoPorTarjetaYComercio.mockResolvedValue({ id: 'md-1' });
     transaccionRepositoryMock.findOne.mockResolvedValue(null);
-    const webhookSpy = jest.spyOn(service as any, 'notificarWebhookComercio').mockResolvedValue(undefined);
     transaccionRepositoryMock.save.mockResolvedValue({
       id: 'tx-mit-2',
       estado: EstadoTransaccionDb.RECHAZADO,
@@ -321,17 +395,32 @@ describe('PagoService', () => {
     }, 'mc-1');
 
     expect(result.status).toBe(EstadoRespuestaTransaccion.RECHAZADO);
-    expect(webhookSpy).toHaveBeenCalledWith(
+    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
+      'analitica.eventos.transacciones',
       expect.objectContaining({
-        id: 'mc-1',
-        webhookUrl: 'http://merchant.local/webhook',
+        event_type: 'confirmar_pago',
+        payload: expect.objectContaining({
+          transaction_id: 'tx-mit-2',
+          order_id: 'ORD-MIT-2',
+          approved: false,
+          codigo_error: 'insufficient_funds',
+          token_transaccion: 'card-2',
+        }),
       }),
+    );
+    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
+      'pagos.notificaciones.webhooks',
       expect.objectContaining({
-        event: 'transaction.rejected',
-        operationType: 'MIT',
-        transactionId: 'tx-mit-2',
-        idOrden: 'ORD-MIT-2',
-        reason: 'Saldo insuficiente',
+        targetUrl: 'http://merchant.local/webhook',
+        payload: expect.objectContaining({
+          event_type: 'confirmar_pago',
+          payload: expect.objectContaining({
+            approved: false,
+            codigo_error: 'insufficient_funds',
+            subscription_id: 'md-1',
+            token_transaccion: 'card-2',
+          }),
+        }),
       }),
     );
   });

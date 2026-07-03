@@ -27,6 +27,9 @@ export class DiscrepanciaConciliacion {
   @Column({ type: 'int', nullable: true })
   rrn!: number | null;
 
+  @Column({ name: 'id_transaccion', type: 'uuid', nullable: true })
+  id_transaccion!: string | null;
+
   @Column({
     type: 'enum',
     enum: TipoDiscrepancia,
