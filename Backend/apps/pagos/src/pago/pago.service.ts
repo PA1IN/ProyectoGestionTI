@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto';
 import type { StringValue } from 'ms';
 import { CreateTransaccionDto } from './dto/create-transaccion.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { CheckoutDto } from './dto/checkout.dto';
 import { MitDto } from './dto/mit.dto';
 import { EstadoRespuestaTransaccion } from './enums/estado-respuesta-transaccion.enum';
@@ -64,10 +64,15 @@ export class PagoService {
 
     if (!mandato) {
       const transactionId = randomUUID();
-      const transaccionRechazada = await this.ejecutarTransaccion(async (manager) => {
-        const transaccion = await manager.save(
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      let transaccionRechazada: Transaccion;
+      try {
+        transaccionRechazada = await queryRunner.manager.save(
           Transaccion,
-          manager.create(Transaccion, {
+          queryRunner.manager.create(Transaccion, {
             id: transactionId,
             monto: dto.monto.toFixed(2),
             moneda: dto.moneda.toUpperCase(),
@@ -80,10 +85,10 @@ export class PagoService {
           }),
         );
 
-        await manager.save(
+        await queryRunner.manager.save(
           DetalleTransaccion,
-          manager.create(DetalleTransaccion, {
-            transaccion,
+          queryRunner.manager.create(DetalleTransaccion, {
+            transaccion: transaccionRechazada,
             nombreUsuario: dto.customer ?? 'MIT',
             rut: '',
             tipoPago: TipoPagoDb.TARJETA,
@@ -95,17 +100,22 @@ export class PagoService {
           }),
         );
 
-        await manager.save(
+        await queryRunner.manager.save(
           HistorialTransaccion,
-          manager.create(HistorialTransaccion, {
-            transaccion,
+          queryRunner.manager.create(HistorialTransaccion, {
+            transaccion: transaccionRechazada,
             statusFrom: EstadoTransaccionDb.PENDIENTE,
             statusTo: EstadoTransaccionDb.RECHAZADO,
           }),
         );
 
-        return transaccion;
-      });
+        await queryRunner.commitTransaction();
+      } catch (error) {
+        await queryRunner.rollbackTransaction();
+        throw error;
+      } finally {
+        await queryRunner.release();
+      }
 
       await this.publicarEventoTransaccion({
         merchantCredential,
@@ -227,10 +237,15 @@ export class PagoService {
       ? EstadoTransaccionDb.RECHAZADO
       : EstadoTransaccionDb.APROBADO;
 
-    const transaccionFinal = await this.ejecutarTransaccion(async (manager) => {
-      const transaccionActualizada = await manager.save(
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    let transaccionFinal: Transaccion;
+    try {
+      transaccionFinal = await queryRunner.manager.save(
         Transaccion,
-        manager.create(Transaccion, {
+        queryRunner.manager.create(Transaccion, {
           ...transaccionBase,
           estado: estadoFinal,
           rrn: Math.floor(100000 + Math.random() * 900000),
@@ -241,10 +256,10 @@ export class PagoService {
         }),
       );
 
-      await manager.save(
+      await queryRunner.manager.save(
         DetalleTransaccion,
-        manager.create(DetalleTransaccion, {
-          transaccion: transaccionActualizada,
+        queryRunner.manager.create(DetalleTransaccion, {
+          transaccion: transaccionFinal,
           nombreUsuario: dto.customer ?? 'MIT',
           rut: '',
           tipoPago: TipoPagoDb.TARJETA,
@@ -258,17 +273,22 @@ export class PagoService {
         }),
       );
 
-      await manager.save(
+      await queryRunner.manager.save(
         HistorialTransaccion,
-        manager.create(HistorialTransaccion, {
-          transaccion: transaccionActualizada,
+        queryRunner.manager.create(HistorialTransaccion, {
+          transaccion: transaccionFinal,
           statusFrom: EstadoTransaccionDb.PENDIENTE,
           statusTo: estadoFinal,
         }),
       );
 
-      return transaccionActualizada;
-    });
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
 
     if (estadoFinal === EstadoTransaccionDb.RECHAZADO) {
       await this.publicarEventoTransaccion({
@@ -595,10 +615,15 @@ export class PagoService {
         mandateId: null,
       };
 
-      const transaccionFinal = await this.ejecutarTransaccion<Transaccion>(async (manager) => {
-        const transaccionActualizada = await manager.save(
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      let transaccionFinal: Transaccion;
+      try {
+        transaccionFinal = await queryRunner.manager.save(
           Transaccion,
-          manager.create(Transaccion, {
+          queryRunner.manager.create(Transaccion, {
             ...transaccionBase,
             estado: estadoFinal,
             rrn: Math.floor(100000 + Math.random() * 900000),
@@ -609,10 +634,10 @@ export class PagoService {
           }),
         );
 
-        await manager.save(
+        await queryRunner.manager.save(
           DetalleTransaccion,
-          manager.create(DetalleTransaccion, {
-            transaccion: transaccionActualizada,
+          queryRunner.manager.create(DetalleTransaccion, {
+            transaccion: transaccionFinal,
             nombreUsuario: checkoutDto.titular ?? 'ANONIMO',
             rut: '',
             tipoPago: TipoPagoDb.TARJETA,
@@ -626,17 +651,22 @@ export class PagoService {
           }),
         );
 
-        await manager.save(
+        await queryRunner.manager.save(
           HistorialTransaccion,
-          manager.create(HistorialTransaccion, {
-            transaccion: transaccionActualizada,
+          queryRunner.manager.create(HistorialTransaccion, {
+            transaccion: transaccionFinal,
             statusFrom: previousStatus,
             statusTo: estadoFinal,
           }),
         );
 
-        return transaccionActualizada;
-      });
+        await queryRunner.commitTransaction();
+      } catch (error) {
+        await queryRunner.rollbackTransaction();
+        throw error;
+      } finally {
+        await queryRunner.release();
+      }
 
       if (estadoFinal === EstadoTransaccionDb.RECHAZADO) {
         await this.publicarEventoTransaccion({
@@ -973,24 +1003,6 @@ export class PagoService {
         `Publicación omitida en ${queueName}`,
         error instanceof Error ? error.stack : String(error),
       );
-    }
-  }
-
-  private async ejecutarTransaccion<T>(trabajo: (manager: EntityManager) => Promise<T>): Promise<T> {
-    const queryRunner = this.dataSource.createQueryRunner();
-
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      const resultado = await trabajo(queryRunner.manager);
-      await queryRunner.commitTransaction();
-      return resultado;
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
     }
   }
 
