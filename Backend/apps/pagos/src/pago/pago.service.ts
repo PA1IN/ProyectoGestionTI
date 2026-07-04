@@ -23,9 +23,8 @@ import {
   RabbitMqService,
   TRANSACTION_ALERTS_ANALYTICS_QUEUE,
   TRANSACTION_EVENTS_ANALYTICS_QUEUE,
-  TRANSACTION_WEBHOOK_QUEUE,
   AnalyticsTransactionEventEnvelope,
-  TransactionAlertEnvelope,
+  TransactionAlert,
   TransactionWebhookErrorCode,
   TransactionWebhookEvent,
   WebhookJob,
@@ -282,7 +281,7 @@ export class PagoService {
         moneda: dto.moneda.toUpperCase(),
         tokenTransaccion: cardRecord.id,
         approved: false,
-        codigoError: this.normalizarCodigoErrorWebhook(bancoRespuesta.message),
+        codigoError: this.errorHelper(bancoRespuesta.message),
         paymentMethodLast4: cardRecord.last4,
         operationType: 'MIT',
         publishExternal: true,
@@ -385,15 +384,6 @@ export class PagoService {
     }
 
     const transactionId = randomUUID();
-    const transaccionBase = {
-      id: transactionId,
-      monto: createTransaccionDto.monto.toFixed(2),
-      moneda: createTransaccionDto.moneda,
-      estado: EstadoTransaccionDb.PENDIENTE,
-      idOrden: createTransaccionDto.idOrden,
-      tipoOperacion: TipoOperacionTransaccionDb.CIT,
-      merchantCredentialId: merchantCredential.id,
-    };
 
     const payload: TransactionPayload = {
       transactionId,
@@ -529,8 +519,7 @@ export class PagoService {
       }
       const previousStatus = transaccion.estado;
       const last4 = checkoutDto.numeroTarjeta.slice(-4);
-      const brand = this.detectarMarcaTarjeta(checkoutDto.numeroTarjeta);
-      const [expMonth, expYear] = this.parseFechaExpiracion(checkoutDto.fechaExpiracion);
+      const brand = this.tarjetaService.detectarMarcaTarjeta(checkoutDto.numeroTarjeta);
 
       const bancoRespuesta = await this.tarjetaService.autorizarBanco({
         numero: checkoutDto.numeroTarjeta,
@@ -609,7 +598,7 @@ export class PagoService {
           moneda: payload.moneda,
           tokenTransaccion: token,
           approved: false,
-          codigoError: this.normalizarCodigoErrorWebhook(bancoRespuesta.message),
+          codigoError: this.errorHelper(bancoRespuesta.message),
           paymentMethodLast4: last4,
           operationType: 'CIT',
           publishExternal: true,
@@ -697,7 +686,7 @@ export class PagoService {
     }
 
     try {
-      await this.rmqService.publish<WebhookJob<TPayload>>(TRANSACTION_WEBHOOK_QUEUE, {
+      await this.rmqService.publish<WebhookJob<TPayload>>('pagos.notificaciones.webhooks', {
         targetUrl: merchantCredential.webhookUrl,
         payload,
       });
@@ -780,7 +769,7 @@ export class PagoService {
     }
   }
 
-  private normalizarCodigoErrorWebhook(message: string | null): 'insufficient_funds' | 'rejected' {
+  private errorHelper(message: string | null): 'insufficient_funds' | 'rejected' {
     if (message && /saldo insuficiente/i.test(message)) {
       return 'insufficient_funds';
     }
@@ -794,8 +783,8 @@ export class PagoService {
     montoOriginal: number;
     montoCobrado: number;
   }): Promise<void> {
-    const alerta: TransactionAlertEnvelope = {
-      sistema_id: this.obtenerSistemaId(),
+    const alerta: TransactionAlert = {
+      sistema_id: 'P04',
       creado_en: new Date().toISOString(),
       payload: {
         tipo: 'Transaccion',
@@ -839,39 +828,6 @@ export class PagoService {
     } finally {
       await queryRunner.release();
     }
-  }
-
-  private obtenerSistemaId(): string {
-    return this.configService.get<string>('SYSTEM_ID') || 'P04';
-  }
-
-  private detectarMarcaTarjeta(numeroPan: string) {
-    if (/^4/.test(numeroPan)) {
-      return 'VISA';
-    }
-
-    if (/^5[1-5]/.test(numeroPan)) {
-      return 'MASTERCARD';
-    }
-
-    if (/^3[47]/.test(numeroPan)) {
-      return 'AMEX';
-    }
-
-    return 'UNKNOWN';
-  }
-
-  private parseFechaExpiracion(fechaExpiracion: string): [number | null, number | null] {
-    const [monthRaw, yearRaw] = fechaExpiracion.split('/');
-    const month = Number.parseInt(monthRaw, 10);
-    const year = Number.parseInt(yearRaw, 10);
-
-    if (Number.isNaN(month) || Number.isNaN(year)) {
-      return [null, null];
-    }
-
-    const normalizedYear = yearRaw.length === 2 ? 2000 + year : year;
-    return [month, normalizedYear];
   }
 
   async getDetalleTransaccion(id: number) {

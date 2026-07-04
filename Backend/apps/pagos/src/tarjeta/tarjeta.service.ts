@@ -104,6 +104,22 @@ export class TarjetaService {
     };
   }
 
+  detectarMarcaTarjeta(numeroPan: string) {
+    if (/^4/.test(numeroPan)) {
+      return 'VISA';
+    }
+
+    if (/^5[1-5]/.test(numeroPan)) {
+      return 'MASTERCARD';
+    }
+
+    if (/^3[47]/.test(numeroPan)) {
+      return 'AMEX';
+    }
+
+    return 'UNKNOWN';
+  }
+
   private maskNumero(numero: string) {
     return `${numero.slice(0, 4)}****${numero.slice(-4)}`;
   }

@@ -1,4 +1,4 @@
-export const TRANSACTION_WEBHOOK_QUEUE = 'pagos.notificaciones.webhooks';
+//export const TRANSACTION_WEBHOOK_QUEUE = 'pagos.notificaciones.webhooks';
 export const TRANSACTION_EVENTS_ANALYTICS_QUEUE = 'analitica.eventos.transacciones';
 export const TRANSACTION_ALERTS_ANALYTICS_QUEUE = 'analitica.alertas.transacciones';
 export const CONCILIATION_ALERTS_ANALYTICS_QUEUE = 'analitica.alertas.conciliacion';
@@ -7,8 +7,6 @@ export type WebhookJob<TPayload> = {
   targetUrl: string;
   payload: TPayload;
 };
-
-export type PaymentSource = 'payments';
 
 export type TransactionIntentEventPayload = {
   transaction_id: string;
@@ -32,7 +30,7 @@ export type TransactionConfirmEventPayload = {
 };
 
 export type TransactionWebhookEvent = {
-  source: PaymentSource;
+  source: 'payments';
   event_type: 'intento_pago' | 'confirmar_pago';
   payload: TransactionIntentEventPayload | TransactionConfirmEventPayload;
 };
@@ -54,9 +52,15 @@ export type AnalyticsTransactionEventPayload = {
 };
 
 export type AnalyticsTransactionEventEnvelope = {
-  source: PaymentSource;
+  source: 'payments';
   event_type: 'intento_pago' | 'confirmar_pago';
   payload: AnalyticsTransactionEventPayload;
+};
+
+export type TransactionAlert = {
+  sistema_id: string;
+  creado_en: string;
+  payload: TransactionAmountMismatchAlert | TransactionRetryWarningAlert;
 };
 
 export type TransactionAmountMismatchAlert = {
@@ -77,12 +81,10 @@ export type TransactionRetryWarningAlert = {
   transacciones: string[];
 };
 
-export type TransactionAlertPayload = TransactionAmountMismatchAlert | TransactionRetryWarningAlert;
-
-export type TransactionAlertEnvelope = {
+export type ConciliationAlert = {
   sistema_id: string;
   creado_en: string;
-  payload: TransactionAlertPayload;
+  payload: ConciliationAlertPayload;
 };
 
 export type ConciliationAlertPayload =
@@ -109,9 +111,3 @@ export type ConciliationAlertPayload =
       monto_interno: number | null;
       monto_banco: number | null;
     };
-
-export type ConciliationAlertEnvelope = {
-  sistema_id: string;
-  creado_en: string;
-  payload: ConciliationAlertPayload;
-};

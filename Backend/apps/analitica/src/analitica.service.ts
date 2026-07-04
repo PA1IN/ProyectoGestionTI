@@ -6,9 +6,8 @@ import {
   CONCILIATION_ALERTS_ANALYTICS_QUEUE,
   TRANSACTION_ALERTS_ANALYTICS_QUEUE,
   TRANSACTION_EVENTS_ANALYTICS_QUEUE,
-  TRANSACTION_WEBHOOK_QUEUE,
-  TransactionAlertEnvelope,
-  ConciliationAlertEnvelope,
+  TransactionAlert,
+  ConciliationAlert,
   WebhookJob,
   RabbitMqService,
 } from '@app/rmq';
@@ -53,17 +52,13 @@ export class AnaliticaService implements OnModuleInit {
       this.rmqService.consume<AnalyticsTransactionEventEnvelope>(TRANSACTION_EVENTS_ANALYTICS_QUEUE, async (payload) => {
         await this.registrarEventoTransaccion(payload);
       }),
-      this.rmqService.consume<TransactionAlertEnvelope>(TRANSACTION_ALERTS_ANALYTICS_QUEUE, async (payload) => {
+      this.rmqService.consume<TransactionAlert>(TRANSACTION_ALERTS_ANALYTICS_QUEUE, async (payload) => {
         await this.registrarAlertaTransaccion(payload);
       }),
-      this.rmqService.consume<ConciliationAlertEnvelope>(CONCILIATION_ALERTS_ANALYTICS_QUEUE, async (payload) => {
+      this.rmqService.consume<ConciliationAlert>(CONCILIATION_ALERTS_ANALYTICS_QUEUE, async (payload) => {
         await this.registrarAlertaConciliacion(payload);
       }),
     ]);
-  }
-
-  getHello(): string {
-    return 'Hello World!';
   }
 
   private async registrarEventoTransaccion(evento: AnalyticsTransactionEventEnvelope): Promise<void> {
@@ -94,7 +89,7 @@ export class AnaliticaService implements OnModuleInit {
     });
   }
 
-  private async registrarAlertaTransaccion(alerta: TransactionAlertEnvelope): Promise<void> {
+  private async registrarAlertaTransaccion(alerta: TransactionAlert): Promise<void> {
     await this.alertaHistoricaRepository.save(
       this.alertaHistoricaRepository.create({
         tipo: TipoAlertaHistorica.TRANSACCION,
@@ -104,7 +99,7 @@ export class AnaliticaService implements OnModuleInit {
     );
   }
 
-  private async registrarAlertaConciliacion(alerta: ConciliationAlertEnvelope): Promise<void> {
+  private async registrarAlertaConciliacion(alerta: ConciliationAlert): Promise<void> {
     await this.alertaHistoricaRepository.save(
       this.alertaHistoricaRepository.create({
         tipo: TipoAlertaHistorica.CONCILIACION,
@@ -134,9 +129,9 @@ export class AnaliticaService implements OnModuleInit {
     await this.alertaHistoricaRepository.save(alertaRetry);
 
     if (params.webhookUrl) {
-      await this.rmqService.publish<WebhookJob<TransactionAlertEnvelope>>(TRANSACTION_WEBHOOK_QUEUE, {
+      await this.rmqService.publish<WebhookJob<TransactionAlert>>('pagos.notificaciones.webhooks', {
         targetUrl: params.webhookUrl,
-        payload: alertaRetry.payload as unknown as TransactionAlertEnvelope,
+        payload: alertaRetry.payload as unknown as TransactionAlert,
       });
     }
   }
@@ -146,7 +141,7 @@ export class AnaliticaService implements OnModuleInit {
   }
 
   private construirPayloadAlertaTransaccion(
-    payload: TransactionAlertEnvelope['payload'],
+    payload: TransactionAlert['payload'],
   ): StoredTransactionAmountMismatchPayload | StoredTransactionRetryAlertPayload {
     if (payload.error === ErrorAlertaHistorica.NOT_EQUAL) {
       return {
@@ -164,7 +159,7 @@ export class AnaliticaService implements OnModuleInit {
   }
 
   private construirPayloadAlertaConciliacion(
-    payload: ConciliationAlertEnvelope['payload'],
+    payload: ConciliationAlert['payload'],
   ): StoredConciliationAlertPayload {
     return {
       id_transaccion: payload.id_transaccion,

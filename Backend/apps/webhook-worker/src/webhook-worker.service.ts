@@ -1,5 +1,5 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { RabbitMqService, TRANSACTION_WEBHOOK_QUEUE, WebhookJob } from '@app/rmq';
+import { RabbitMqService, WebhookJob } from '@app/rmq';
 
 @Injectable()
 export class WebhooksWorkerService implements OnModuleInit {
@@ -7,7 +7,7 @@ export class WebhooksWorkerService implements OnModuleInit {
   constructor(private readonly rmqService: RabbitMqService) {}
 
   async onModuleInit() {
-    await this.rmqService.consume<WebhookJob<unknown>>(TRANSACTION_WEBHOOK_QUEUE, async (payload) => {
+    await this.rmqService.consume<WebhookJob<unknown>>('pagos.notificaciones.webhooks', async (payload) => {
       await this.enviarWebhookACliente(payload.targetUrl, payload.payload);
     });
   }
