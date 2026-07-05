@@ -3,6 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import keycloak from '@/auth/keycloak';
 import api from '@/api/axios';
+import { usePathname } from 'next/navigation';
 
 type AdminRole = 'admin';
 
@@ -18,16 +19,30 @@ interface TipoAutenticacion {
 
 const contextoAutenticacion = createContext<TipoAutenticacion | undefined>(undefined);
 
+let keycloakIniciado = false;
+
 export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
     const [token, setToken] = useState<string | null>(null);
     const [rolUsuario, setRolUsuario] = useState<AdminRole | null>(null);
     const [loading, setLoading] = useState(true);
     const [autenticado, setAutenticado] = useState(false);
 
+    const ruta = usePathname();
+
     const obtenerRoles = useCallback(() => {
         const realmRoles = keycloak.tokenParsed?.realm_access?.roles ?? [];
         return [...new Set([...realmRoles])];
     }, []);
+
+    const sincronizarEstado = useCallback(() => {
+        const tokenActual = keycloak.token ?? null;
+        const roles = obtenerRoles();
+        const tieneRolAdmin = roles.includes('admin');
+
+        setToken(tokenActual);
+        setAutenticado(Boolean(keycloak.authenticated));
+        setRolUsuario(tieneRolAdmin ? 'admin' : null);
+    }, [obtenerRoles]);
 
     const sincronizarDesdeBackend = useCallback(async () => {
         try {
@@ -41,22 +56,30 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
         } catch {
             sincronizarEstado();
         }
-    }, [obtenerRoles]);
+    }, [sincronizarEstado]);
 
-    const sincronizarEstado = useCallback(() => {
-        const tokenActual = keycloak.token ?? null;
-        const roles = obtenerRoles();
-        const tieneRolAdmin = roles.includes('admin');
-
-        setToken(tokenActual);
-        setAutenticado(Boolean(keycloak.authenticated));
-        setRolUsuario(tieneRolAdmin ? 'admin' : null);
-    }, [obtenerRoles]);
+    
 
     useEffect(() => {
         let cancelado = false;
 
         const iniciar = async () => {
+            //verifica si es la ruta publica de pago antes de llamar a keycloak
+            if (ruta?.startsWith('/checkout'))
+            {
+                if (!cancelado)
+                {
+                    setLoading(false);
+                }
+                return; 
+            }
+
+            if (keycloakIniciado) {
+                return;
+            }
+
+            keycloakIniciado = true;
+
             try {
                 const authenticated = await keycloak.init({
                     onLoad: 'check-sso',
@@ -84,7 +107,7 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
         return () => {
             cancelado = true;
         };
-    }, [sincronizarEstado, sincronizarDesdeBackend]);
+    }, [sincronizarEstado, sincronizarDesdeBackend, ruta]);
 
     const iniciarSesion = useCallback(async () => {
         if (keycloak.authenticated && obtenerRoles().includes('admin')) {
@@ -129,4 +152,3 @@ export const useAuth = (): TipoAutenticacion => {
     }
     return contexto;
 }
-
