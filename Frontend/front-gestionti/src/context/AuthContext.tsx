@@ -37,8 +37,9 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
     const sincronizarEstado = useCallback(() => {
         const tokenActual = keycloak.token ?? null;
         const roles = obtenerRoles();
+        console.log("Roles obtenidos desde Keycloak:", roles);
         const tieneRolAdmin = roles.includes('admin');
-
+        console.log("admin: ", tieneRolAdmin);
         setToken(tokenActual);
         setAutenticado(Boolean(keycloak.authenticated));
         setRolUsuario(tieneRolAdmin ? 'admin' : null);
@@ -48,6 +49,8 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
         try {
             const respuesta = await api.get('/auth/me');
             const rolesBackend = Array.isArray(respuesta.data?.roles) ? respuesta.data.roles : [];
+            console.log("Roles obtenidos desde el backend:", rolesBackend);
+            console.log("respuesta dek backend:", respuesta.data);
             const tieneRolAdmin = rolesBackend.includes('admin');
 
             setToken(keycloak.token ?? null);
@@ -126,6 +129,17 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const isAdmin = rolUsuario === 'admin';
+
+    useEffect(() => {
+        if (!loading) {
+            console.log("estado final del contexto: ");
+            console.log("rolUsuario:", rolUsuario);
+            console.log("isAdmin:", isAdmin);
+            console.log("autenticado:", autenticado);
+            console.log("loading:", loading);
+            
+        }
+    }, [rolUsuario, isAdmin,autenticado,loading]);
 
     const valorContexto = useMemo(() => ({
         token,

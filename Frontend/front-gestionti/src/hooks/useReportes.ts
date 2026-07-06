@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '@/api/axios';
+import { apiProy9 } from '@/api/axiosProy9';
+import { useAuth } from '@/context/AuthContext';
 
 export interface KpiResumenHisto {
     volumenTransDiario: number;
@@ -30,15 +31,15 @@ export interface ReporteHistorico {
 
 //obtiene los reportes historicos de la auditoria
 export function useObtenerReportes() {
+    const { autenticado } = useAuth();
     return useQuery<ReporteHistorico[]>({
         queryKey: ['reportes_historicos'],
-        refetchInterval: 3000,
         queryFn: async () => {
-            /*
-            const respuesta = await api.get('/auditoria/reportes');
+            
+            const respuesta = await apiProy9.get('/auditoria/reportes');
             return respuesta.data;
-            */
-
+            
+            /*
             return new Promise((resolve) => {
                 setTimeout(() => {
 
@@ -49,16 +50,19 @@ export function useObtenerReportes() {
                     ]);
                 }, 800);
             });
-        }
+            */
+        },
+        enabled: autenticado,
+        refetchInterval: 15000
     });
 }
 
-export function obtenerDetalleReporteHistorico(id: string): Promise<DetalleReporteHisto> {
-    /*
-    const respuesta = await api.get(`/auditoria/reportes/${id}`);
+export async function obtenerDetalleReporteHistorico(id: string): Promise<DetalleReporteHisto> {
+    
+    const respuesta = await apiProy9.get(`/auditoria/reportes/${id}`);
     return respuesta.data;
-    */
-
+    
+    /*
     return new Promise((resolve) => {
         setTimeout(() => {
             let fechaDocumento = '2024-06-01T10:00:00Z';
@@ -85,6 +89,7 @@ export function obtenerDetalleReporteHistorico(id: string): Promise<DetalleRepor
             });
         }, 300);
     });
+    */
 }
 
 //solicita la generacion de un nuevo reporte
@@ -92,16 +97,18 @@ export function useGenerarReporte() {
     const clienteQuery = useQueryClient();
     return useMutation({
         mutationFn: async () => {
-            /*
-            const respuesta = await api.post('/auditoria/reportes/generar');
+            
+            const respuesta = await apiProy9.post('/auditoria/reportes/generar');
             return respuesta.data;
-            */
+            
+           /*
             return new Promise((resolve) => {
                 setTimeout(() => {
                     console.log("peticion enviada para generar reporte");
                     resolve({ success: true});
                 }, 2000);
             });
+            */
         },
         onSuccess: () => {
             clienteQuery.invalidateQueries({ queryKey: ['reportes_historicos'] });

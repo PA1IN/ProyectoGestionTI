@@ -76,8 +76,8 @@ export default function DashboardResumenPage(){
                     <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-6">
                         Flujo de transacciones del dia 
                     </h3>
-                    <div className="h-72">
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div className="h-72 w-full min-w-0">
+                        <ResponsiveContainer width="99%" height="100%">
                             <LineChart data={metricas.transaccionesDiarias} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke = "#f1f5f9"/>
                                 <XAxis dataKey="hora" axisLine={false} tick={{fontSize: 12, fill: '#64748b'}}/>
@@ -97,8 +97,8 @@ export default function DashboardResumenPage(){
                         <CreditCard className="w-4 h-4 text-indigo-500"/>
                         Volumen por método de pago
                     </h3>
-                    <div className="h-72">
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div className="h-72 w-full min-w-0">
+                        <ResponsiveContainer width="99%" height="100%">
                             <BarChart data={metricas.volumenPorMetodo} layout="vertical" margin={{ top: 0, right: 20, left: 20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke = "#f1f5f9"/>
                                 <XAxis type="number" hide />
