@@ -5,8 +5,7 @@ import { DataSource, Repository } from 'typeorm';
 import { EstadoDiscrepancia, DiscrepanciaConciliacion } from './procesamiento/entities/discrepancia-conciliacion.entity';
 import {
   CONCILIATION_ALERTS_ANALYTICS_QUEUE,
-  TRANSACTION_WEBHOOK_QUEUE,
-  ConciliationAlertEnvelope,
+  ConciliationAlert,
   RabbitMqService,
   WebhookJob,
 } from '@app/rmq';
@@ -167,7 +166,7 @@ export class ConciliacionService {
     const webhookUrl = this.configService.get<string>('CONCILIATION_WEBHOOK_URL') || null;
 
     for (const discrepancia of discrepancias) {
-      const alerta: ConciliationAlertEnvelope = {
+      const alerta: ConciliationAlert = {
         sistema_id: this.configService.get<string>('SYSTEM_ID') || 'P04',
         creado_en: new Date().toISOString(),
         payload: discrepancia.tipo === 'DIFERENCIA_DE_MONTO'
@@ -189,10 +188,10 @@ export class ConciliacionService {
             },
       };
 
-      await this.rmqService.publish<ConciliationAlertEnvelope>(CONCILIATION_ALERTS_ANALYTICS_QUEUE, alerta);
+      await this.rmqService.publish<ConciliationAlert>(CONCILIATION_ALERTS_ANALYTICS_QUEUE, alerta);
 
       if (webhookUrl) {
-        await this.rmqService.publish<WebhookJob<ConciliationAlertEnvelope>>(TRANSACTION_WEBHOOK_QUEUE, {
+        await this.rmqService.publish<WebhookJob<ConciliationAlert>>('pagos.notificaciones.webhooks', {
           targetUrl: webhookUrl,
           payload: alerta,
         });
