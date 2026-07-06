@@ -8,12 +8,12 @@ function ExitoComponent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const comercio = searchParams.get('comercio');
-    const redirectUrl = searchParams.get('redirectUrl');
+    const returnUrl = searchParams.get('returnUrl');
 
     const volveraUrl = () => {
-        if(redirectUrl)
+        if(returnUrl)
         {
-            window.location.href = redirectUrl;
+            window.location.href = returnUrl;
         } else {
             router.push('/');
         }
