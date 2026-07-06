@@ -51,7 +51,7 @@ export type AnalyticsTransactionEventPayload = {
   timestamp_evento: string;
 };
 
-export type AnalyticsTransactionEventEnvelope = {
+export type AnalyticsTransactionEvent = {
   source: 'payments';
   event_type: 'intento_pago' | 'confirmar_pago';
   payload: AnalyticsTransactionEventPayload;

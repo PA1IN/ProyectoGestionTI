@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
-  AnalyticsTransactionEventEnvelope,
+  AnalyticsTransactionEvent,
   CONCILIATION_ALERTS_ANALYTICS_QUEUE,
   TRANSACTION_ALERTS_ANALYTICS_QUEUE,
   TRANSACTION_EVENTS_ANALYTICS_QUEUE,
@@ -49,7 +49,7 @@ export class AnaliticaService implements OnModuleInit {
 
   async onModuleInit() {
     await Promise.all([
-      this.rmqService.consume<AnalyticsTransactionEventEnvelope>(TRANSACTION_EVENTS_ANALYTICS_QUEUE, async (payload) => {
+      this.rmqService.consume<AnalyticsTransactionEvent>(TRANSACTION_EVENTS_ANALYTICS_QUEUE, async (payload) => {
         await this.registrarEventoTransaccion(payload);
       }),
       this.rmqService.consume<TransactionAlert>(TRANSACTION_ALERTS_ANALYTICS_QUEUE, async (payload) => {
@@ -61,7 +61,7 @@ export class AnaliticaService implements OnModuleInit {
     ]);
   }
 
-  private async registrarEventoTransaccion(evento: AnalyticsTransactionEventEnvelope): Promise<void> {
+  private async registrarEventoTransaccion(evento: AnalyticsTransactionEvent): Promise<void> {
     if (evento.event_type !== 'confirmar_pago' || evento.payload.approved !== false || evento.payload.codigo_error === 'NO_MANDATE') {
       return;
     }

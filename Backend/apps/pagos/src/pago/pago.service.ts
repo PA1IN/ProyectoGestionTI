@@ -23,7 +23,7 @@ import {
   RabbitMqService,
   TRANSACTION_ALERTS_ANALYTICS_QUEUE,
   TRANSACTION_EVENTS_ANALYTICS_QUEUE,
-  AnalyticsTransactionEventEnvelope,
+  AnalyticsTransactionEvent,
   TransactionAlert,
   TransactionWebhookErrorCode,
   TransactionWebhookEvent,
@@ -911,7 +911,7 @@ export class PagoService {
   }): Promise<void> {
     const timestampEvento = new Date().toISOString();
 
-    const analyticsEvent: AnalyticsTransactionEventEnvelope = {
+    const analyticsEvent: AnalyticsTransactionEvent = {
       source: 'payments',
       event_type: params.eventType,
       payload: {
