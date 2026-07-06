@@ -5,9 +5,11 @@ import { ProcesamientoController } from './procesamiento.controller';
 import { ConciliacionTemporal } from '../conciliacion.entity';
 import { DiscrepanciaConciliacion } from './entities/discrepancia-conciliacion.entity';
 import { ConciliacionService } from '../conciliacion.service';
+import { RmqModule } from '@app/rmq';
 
 @Module({
   imports: [
+    RmqModule,
     TypeOrmModule.forFeature([ConciliacionTemporal, DiscrepanciaConciliacion]),
   ],
   controllers: [ProcesamientoController],
