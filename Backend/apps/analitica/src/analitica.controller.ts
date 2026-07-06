@@ -5,8 +5,4 @@ import { AnaliticaService } from './analitica.service';
 export class AnaliticaController {
   constructor(private readonly analiticaService: AnaliticaService) {}
 
-  @Get()
-  getHello(): string {
-    return this.analiticaService.getHello();
-  }
 }
