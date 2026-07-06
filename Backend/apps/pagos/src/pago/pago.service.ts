@@ -16,7 +16,7 @@ import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.e
 import { MediosPagoService } from '../medios-pago/medios-pago.service';
 import { TarjetaService } from '../tarjeta/tarjeta.service';
 import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/entities/credencial-comercio.entity';
-import { CheckoutDetail, CheckoutQrResult, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult, TransactionWebhookPayload } from './types/pago-response.types';
+import { CheckoutDetail, CheckoutQrResult, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult } from './types/pago-response.types';
 import { CheckoutPayload, TransactionPayload } from './types/pago-jwt-payload.types';
 import { BancoEstadoOperacion } from '../tarjeta/types/banco.types';
 import {
@@ -418,6 +418,20 @@ export class PagoService {
     const token = await this.jwtService.signAsync(payload, { expiresIn });
     const transactionUrl = `${frontendUrl}/checkout/${encodeURIComponent(token)}`;
 
+    await this.transaccionRepository.save(
+      this.transaccionRepository.create({
+        id: transactionId,
+        idOrden: createTransaccionDto.idOrden,
+        monto: createTransaccionDto.monto.toFixed(2),
+        moneda: createTransaccionDto.moneda.toUpperCase(),
+        estado: EstadoTransaccionDb.PENDIENTE,
+        tipoOperacion: TipoOperacionTransaccionDb.CIT,
+        merchantCredentialId: merchantCredential.id,
+        paymentMethodToken: null,
+        mandateId: null,
+      }),
+    );
+
     await this.publicarEventoTransaccion({
       merchantCredential,
       eventType: 'intento_pago',
@@ -602,18 +616,6 @@ export class PagoService {
       const estadoFinal = bancoRespuesta.estado === BancoEstadoOperacion.RECHAZADA
         ? EstadoTransaccionDb.RECHAZADO
         : EstadoTransaccionDb.APROBADO;
-      const citTransactionId = randomUUID();
-      const transaccionBase = {
-        id: citTransactionId,
-        monto: payload.monto.toFixed(2),
-        moneda: payload.moneda,
-        estado: EstadoTransaccionDb.PENDIENTE,
-        idOrden: payload.idOrden,
-        tipoOperacion: TipoOperacionTransaccionDb.CIT,
-        merchantCredentialId: merchantCredential.id,
-        paymentMethodToken: null,
-        mandateId: null,
-      };
 
       const queryRunner = this.dataSource.createQueryRunner();
       await queryRunner.connect();
@@ -624,7 +626,7 @@ export class PagoService {
         transaccionFinal = await queryRunner.manager.save(
           Transaccion,
           queryRunner.manager.create(Transaccion, {
-            ...transaccionBase,
+            ...transaccion,
             estado: estadoFinal,
             rrn: Math.floor(100000 + Math.random() * 900000),
             tipoOperacion: TipoOperacionTransaccionDb.CIT,
