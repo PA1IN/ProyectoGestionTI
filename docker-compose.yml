@@ -10,7 +10,7 @@ services:
   pagos:
     build:
       context: ./Backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
       args:
         APP_NAME: pagos
     env_file:
@@ -23,7 +23,7 @@ services:
   gateway:
     build:
       context: ./Backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
       args:
         APP_NAME: gateway
     env_file:
@@ -37,7 +37,7 @@ services:
   conciliacion:
     build:
       context: ./Backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
       args:
         APP_NAME: conciliacion
     env_file:
@@ -50,7 +50,7 @@ services:
   analitica:
     build:
       context: ./Backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
       args:
         APP_NAME: analitica
     env_file:
