@@ -8,7 +8,8 @@ ENV NODE_OPTIONS="--max-old-space-size=2048"
 RUN npx nest build gateway && \
     npx nest build pagos && \
     npx nest build conciliacion && \
-    npx nest build analitica
+    npx nest build analitica && \
+    npx nest build webhook-worker
 
 FROM node:20-alpine AS runner
 WORKDIR /app
@@ -24,5 +25,6 @@ CMD ["concurrently", \
   "node dist/apps/gateway/main.js", \
   "node dist/apps/pagos/main.js", \
   "node dist/apps/conciliacion/main.js", \
-  "node dist/apps/analitica/main.js" \
+  "node dist/apps/analitica/main.js", \
+  "node dist/apps/webhook-worker/main.js" \
 ]
