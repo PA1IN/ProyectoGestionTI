@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@libs/config';
 import { RmqModule } from '@app/rmq';
 import { AnaliticaController } from './analitica.controller';
 import { AnaliticaService } from './analitica.service';
 import { AlertaHistorica } from './entities/alerta-historica.entity';
+import { KeycloakAuthGuard } from './auth/keycloak-auth.guard';
 
 @Module({
   imports: [
@@ -21,6 +23,12 @@ import { AlertaHistorica } from './entities/alerta-historica.entity';
     TypeOrmModule.forFeature([AlertaHistorica]),
   ],
   controllers: [AnaliticaController],
-  providers: [AnaliticaService],
+  providers: [
+    AnaliticaService,
+    {
+      provide: APP_GUARD,
+      useClass: KeycloakAuthGuard,
+    },
+  ],
 })
 export class AnaliticaModule {}

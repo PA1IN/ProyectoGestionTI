@@ -11,6 +11,7 @@ import {
   Patch,
   Post,
   Req,
+  Query,
   Res,
   UploadedFile,
   UseInterceptors,
@@ -245,6 +246,46 @@ export class GatewayController {
         '/ucnpay/init/suscription',
         'POST',
         body,
+        headers,
+      ),
+    );
+  }
+
+  @Get('analitica/alertas')
+  @AdminOnly()
+  async getAlertasHistoricas(
+    @Query('revisado') revisado: string | undefined,
+    @Headers() headers: IncomingHttpHeaders,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const query = revisado !== undefined ? `?revisado=${encodeURIComponent(revisado)}` : '';
+
+    return this.relay(
+      response,
+      this.gatewayService.forwardJsonRequest(
+        this.gatewayService.analiticaBaseUrl,
+        `/analitica/alertas${query}`,
+        'GET',
+        undefined,
+        headers,
+      ),
+    );
+  }
+
+  @Patch('analitica/alertas/:id/revisar')
+  @AdminOnly()
+  async marcarAlertaComoRevisada(
+    @Param('id') id: string,
+    @Headers() headers: IncomingHttpHeaders,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.relay(
+      response,
+      this.gatewayService.forwardJsonRequest(
+        this.gatewayService.analiticaBaseUrl,
+        `/analitica/alertas/${id}/revisar`,
+        'PATCH',
+        undefined,
         headers,
       ),
     );

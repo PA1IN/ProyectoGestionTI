@@ -19,6 +19,10 @@ export class GatewayService {
     return this.configService.get<string>('CONCILIACION_SERVICE_URL') || 'http://localhost:3002';
   }
 
+  get analiticaBaseUrl() {
+    return this.configService.get<string>('ANALITICA_SERVICE_URL') || 'http://localhost:3003';
+  }
+
   async forwardJsonRequest<T>(
     baseUrl: string,
     path: string,

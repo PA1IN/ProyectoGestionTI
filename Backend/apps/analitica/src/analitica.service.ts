@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -36,6 +36,15 @@ type StoredConciliationAlertPayload = {
   id_archivo: string | null;
 };
 
+type AlertaHistoricaResumen = {
+  id: string;
+  fecha: string;
+  tipo: 'Transacción' | 'Conciliación';
+  descripcion: string;
+  nivel: 'Alto' | 'Medio' | 'Bajo';
+  revisado: boolean;
+};
+
 @Injectable()
 export class AnaliticaService implements OnModuleInit {
   private readonly logger = new Logger(AnaliticaService.name);
@@ -59,6 +68,28 @@ export class AnaliticaService implements OnModuleInit {
         await this.registrarAlertaConciliacion(payload);
       }),
     ]);
+  }
+
+  async obtenerAlertasHistoricas(revisado?: boolean): Promise<AlertaHistoricaResumen[]> {
+    const alertas = await this.alertaHistoricaRepository.find({
+      where: revisado === undefined ? {} : { revisado },
+      order: { createdAt: 'DESC' },
+    });
+
+    return alertas.map((alerta) => this.formatearAlertaHistorica(alerta));
+  }
+
+  async marcarAlertaComoRevisada(id: string): Promise<AlertaHistoricaResumen> {
+    const alerta = await this.alertaHistoricaRepository.findOne({ where: { id } });
+
+    if (!alerta) {
+      throw new NotFoundException('Alerta histórica no encontrada');
+    }
+
+    alerta.revisado = true;
+    const guardada = await this.alertaHistoricaRepository.save(alerta);
+
+    return this.formatearAlertaHistorica(guardada);
   }
 
   private async registrarEventoTransaccion(evento: AnalyticsTransactionEvent): Promise<void> {
@@ -95,6 +126,7 @@ export class AnaliticaService implements OnModuleInit {
         tipo: TipoAlertaHistorica.TRANSACCION,
         error: alerta.payload.error as ErrorAlertaHistorica,
         payload: this.construirPayloadAlertaTransaccion(alerta.payload),
+        revisado: false,
       }),
     );
   }
@@ -105,6 +137,7 @@ export class AnaliticaService implements OnModuleInit {
         tipo: TipoAlertaHistorica.CONCILIACION,
         error: alerta.payload.tipo_discrepancia as ErrorAlertaHistorica,
         payload: this.construirPayloadAlertaConciliacion(alerta.payload),
+        revisado: false,
       }),
     );
   }
@@ -119,6 +152,7 @@ export class AnaliticaService implements OnModuleInit {
     const alertaRetry = this.alertaHistoricaRepository.create({
       tipo: TipoAlertaHistorica.TRANSACCION,
       error: ErrorAlertaHistorica.RETRY_WARNING,
+      revisado: false,
       payload: {
         ultimos_4: Number.parseInt(params.paymentMethodLast4, 10),
         cantidad: transacciones.length,
@@ -166,5 +200,57 @@ export class AnaliticaService implements OnModuleInit {
       rrn: payload.rrn,
       id_archivo: payload.id_archivo,
     };
+  }
+
+  private formatearAlertaHistorica(alerta: AlertaHistorica): AlertaHistoricaResumen {
+    const fechaBase = alerta.eventCreatedAt ?? alerta.createdAt;
+
+    return {
+      id: alerta.id,
+      fecha: this.formatearFecha(fechaBase),
+      tipo: alerta.tipo === TipoAlertaHistorica.TRANSACCION ? 'Transacción' : 'Conciliación',
+      descripcion: this.construirDescripcionAlerta(alerta),
+      nivel: this.nivelAlerta(alerta),
+      revisado: alerta.revisado,
+    };
+  }
+
+  private nivelAlerta(alerta: AlertaHistorica): 'Alto' | 'Medio' | 'Bajo' {
+    if (alerta.tipo === TipoAlertaHistorica.TRANSACCION && alerta.error === ErrorAlertaHistorica.RETRY_WARNING) {
+      return 'Medio';
+    }
+
+    if (alerta.tipo === TipoAlertaHistorica.CONCILIACION && alerta.error === ErrorAlertaHistorica.DIFERENCIA_DE_MONTO) {
+      return 'Medio';
+    }
+
+    return 'Alto';
+  }
+
+  private construirDescripcionAlerta(alerta: AlertaHistorica): string {
+    const payload = alerta.payload as Record<string, unknown>;
+
+    if (alerta.tipo === TipoAlertaHistorica.TRANSACCION) {
+      if (alerta.error === ErrorAlertaHistorica.NOT_EQUAL) {
+        return `Monto original $${payload.monto_original ?? 0} y cobrado $${payload.monto_cobrado ?? 0}.`;
+      }
+
+      const transacciones = Array.isArray(payload.transacciones) ? payload.transacciones.length : 0;
+      return `Se detectaron ${payload.cantidad ?? transacciones} intentos fallidos con la tarjeta terminada en ${String(payload.ultimos_4 ?? '')}.`;
+    }
+
+    if (alerta.error === ErrorAlertaHistorica.DIFERENCIA_DE_MONTO) {
+      return `Diferencia de monto entre sistema interno y banco para la transacción ${String(payload.id_transaccion ?? 'sin-id')}.`;
+    }
+
+    if (alerta.error === ErrorAlertaHistorica.EXISTE_EN_BANCO) {
+      return `La transacción ${String(payload.id_transaccion ?? 'sin-id')} existe en el banco y no en el sistema interno.`;
+    }
+
+    return `La transacción ${String(payload.id_transaccion ?? 'sin-id')} no fue encontrada en el banco.`;
+  }
+
+  private formatearFecha(fecha: Date): string {
+    return fecha.toISOString().replace('T', ' ').slice(0, 16);
   }
 }

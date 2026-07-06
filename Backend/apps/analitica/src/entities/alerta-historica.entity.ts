@@ -28,6 +28,9 @@ export class AlertaHistorica {
   @Column({ name: 'payload', type: 'jsonb' })
   payload!: Record<string, unknown>;
 
+  @Column({ name: 'revisado', type: 'boolean', default: false })
+  revisado!: boolean;
+
   @Column({ name: 'event_created_at', type: 'timestamp', nullable: true })
   eventCreatedAt!: Date | null;
 
