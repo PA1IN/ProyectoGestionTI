@@ -32,6 +32,9 @@ services:
     env_file:
       - ./Backend/.env
     environment:
+      PAGOS_SERVICE_URL: http://pagos:3001
+      CONCILIACION_SERVICE_URL: http://conciliacion:3002
+      ANALITICA_SERVICE_URL: http://analitica:3003
       DATABASE_URL: postgresql://usuario_pg:password_seguro@db:5432/pasarela_db
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
     ports:
