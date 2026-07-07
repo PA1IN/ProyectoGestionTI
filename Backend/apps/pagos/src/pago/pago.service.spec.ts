@@ -10,11 +10,11 @@ import { TarjetaService } from '../tarjeta/tarjeta.service';
 import { TarjetaGuardada } from '../medios-pago/entities/tarjeta-guardada.entity';
 import { EstadoMandatoPagoDb, MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
 import { EstadoTarjetaGuardadaDb } from '../medios-pago/entities/tarjeta-guardada.entity';
-import { CredencialComercio } from '../comercios/entities/credencial-comercio.entity';
+import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/entities/credencial-comercio.entity';
 import { Transaccion } from './entities/transaccion.entity';
 import { HistorialTransaccion } from './entities/historial-transaccion.entity';
 import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.entity';
-import { EstadoTransaccionDb } from './enums/transaccion.enum';
+import { EstadoTransaccionDb, TipoOperacionTransaccionDb } from './enums/transaccion.enum';
 import { EstadoRespuestaTransaccion } from './enums/estado-respuesta-transaccion.enum';
 import { EstadoTransaccionDb } from './enums/transaccion.enum';
 import { RabbitMqService } from '@app/rmq';
@@ -372,9 +372,9 @@ describe('PagoService', () => {
     const result = await service.processMitPayment({
       idOrden: 'ORD-MIT-1',
       monto: 2500,
-      moneda: 'clp',
+      moneda: 'CLP',
       paymentMethodToken: '11111111-1111-4111-8111-111111111111',
-      customer: 'Cliente Demo',
+      customer: 'Cliente Demo', 
     }, 'mc-1');
 
     expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
@@ -636,4 +636,142 @@ describe('PagoService', () => {
 
     await expect(service.getDetalleTransaccion(1)).resolves.toBeNull();
   });
+  it('processQrTransaction debe aprobar simulación, guardar detalle QR e historial', async () => {
+    // 1. Setup
+    jwtServiceMock.verifyAsync.mockResolvedValue({
+      transactionId: 'tx-qr-2',
+      idOrden: 'ORD-QR-2',
+      monto: 5000,
+      moneda: 'CLP',
+      nombreComercio: 'Comercio UCN',
+      returnUrl: 'http://localhost:3000/return',
+      medioPago: 'QR', // Simula que es el token correcto de QR
+      iatAt: new Date().toISOString(),
+    });
+
+    transaccionRepositoryMock.findOne.mockResolvedValue({
+      id: 'tx-qr-2',
+      estado: EstadoTransaccionDb.PENDIENTE,
+      idOrden: 'ORD-QR-2',
+      merchantCredentialId: 'mc-1',
+    });
+
+    credencialComercioRepositoryMock.findOne.mockResolvedValue({
+      id: 'mc-1',
+      estado: EstadoCredencialComercioDb.ACTIVA,
+      nombreComercio: 'Comercio UCN',
+      webhookUrl: 'http://merchant.local/webhook',
+    });
+
+    // 2. Ejecución
+    const result = await service.processQrTransaction('token-qr-valido');
+
+    // 3. Verificaciones de Base de Datos
+    expect(detalleRepositoryMock.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nombreUsuario: 'COMPRADOR_QR_SIMULADO', // Valor harcodeado en tu función
+        tipoPago: TipoPagoDb.QR,
+        ultimosCuatro: null, // Verificamos que maneje bien los nulos
+        emisorTarjeta: 'BILLETERA_DIGITAL',
+      })
+    );
+
+    expect(historialRepositoryMock.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusFrom: EstadoTransaccionDb.PENDIENTE,
+        statusTo: EstadoTransaccionDb.APROBADO,
+      })
+    );
+
+    expect(transaccionRepositoryMock.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'tx-qr-2',
+        estado: EstadoTransaccionDb.APROBADO,
+        tipoOperacion: TipoOperacionTransaccionDb.CIT,
+      })
+    );
+
+    // 4. Verificaciones de RabbitMQ / Webhooks
+    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
+      'pagos.notificaciones.webhooks',
+      expect.objectContaining({
+        targetUrl: 'http://merchant.local/webhook',
+        payload: expect.objectContaining({
+          event: 'transaction.approved',
+          operationType: 'CIT',
+          status: EstadoRespuestaTransaccion.APROBADO,
+          monto: 5000,
+        }),
+      })
+    );
+
+    // 5. Verificación de la respuesta
+    expect(result).toEqual({
+      status: EstadoRespuestaTransaccion.APROBADO,
+      message: 'Transacción QR aprobada exitosamente (Simulado)',
+      redirectUrl: 'http://localhost:3000/return?status=APROBADO&transactionId=tx-qr-2',
+      transactionId: 'tx-qr-2',
+      details: {
+        monto: 5000,
+        moneda: 'CLP',
+        nombreComercio: 'Comercio UCN',
+      },
+    });
+  });
+
+  it('processQrTransaction debe fallar si el token NO corresponde a un pago QR', async () => {
+    // 1. Setup: Simulamos el payload del Token A (el del checkout normal)
+    jwtServiceMock.verifyAsync.mockResolvedValue({
+      transactionId: 'tx-qr-3',
+      idOrden: 'ORD-QR-3',
+      // NOTA: Falta la propiedad medioPago: 'QR'
+    });
+
+    // 2. Ejecución y Verificación
+    // Como el servicio atrapa el error y lanza un UnauthorizedException genérico
+    await expect(service.processQrTransaction('token-normal')).rejects.toThrow(
+      'Token de QR inválido o expirado' 
+      // o 'El token provisto no corresponde a una operación por QR' dependiendo de tu versión final del catch
+    );
+
+    // Nos aseguramos de que no guardó nada
+    expect(transaccionRepositoryMock.findOne).not.toHaveBeenCalled();
+    expect(detalleRepositoryMock.save).not.toHaveBeenCalled();
+  });
+
+  it('processQrTransaction debe devolver el estado previo si la transacción ya fue procesada', async () => {
+    // 1. Setup
+    jwtServiceMock.verifyAsync.mockResolvedValue({
+      transactionId: 'tx-qr-4',
+      idOrden: 'ORD-QR-4',
+      monto: 1000,
+      moneda: 'CLP',
+      nombreComercio: 'Comercio UCN',
+      returnUrl: 'http://localhost:3000/return',
+      medioPago: 'QR',
+    });
+
+    // Simulamos que la base de datos devuelve una transacción YA APROBADA
+    transaccionRepositoryMock.findOne.mockResolvedValue({
+      id: 'tx-qr-4',
+      estado: EstadoTransaccionDb.APROBADO,
+      idOrden: 'ORD-QR-4',
+      merchantCredentialId: 'mc-1',
+    });
+
+    credencialComercioRepositoryMock.findOne.mockResolvedValue({
+      id: 'mc-1',
+      estado: EstadoCredencialComercioDb.ACTIVA,
+    });
+
+    // 2. Ejecución
+    const result = await service.processQrTransaction('token-ya-usado');
+
+    // 3. Verificaciones
+    expect(detalleRepositoryMock.save).not.toHaveBeenCalled(); // No debe guardar un nuevo detalle
+    expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
+    expect(result.message).toBe('Transacción ya aprobada');
+    expect(result.redirectUrl).toContain('status=APROBADO');
+  });
+  
 });
