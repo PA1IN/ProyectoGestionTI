@@ -17,7 +17,7 @@ export default function Home() {
         monto: 16000,
         moneda: 'CLP',
         nombreComercio: 'Proyecto Gestión TI',
-        returnUrl: `${window.location.origin}/resultado/exito`,
+        returnUrl: 'https://youtu.be/dQw4w9WgXcQ',
       });
 
       window.location.href = respuesta.data.transactionUrl;
