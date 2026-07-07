@@ -15,6 +15,9 @@ services:
         APP_NAME: pagos
     env_file:
       - ./Backend/.env
+    environment:
+      DATABASE_URL: postgresql://usuario_pg:password_seguro@db:5432/pasarela_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
     ports:
       - "3001:3001"
     depends_on:
@@ -28,6 +31,9 @@ services:
         APP_NAME: gateway
     env_file:
       - ./Backend/.env
+    environment:
+      DATABASE_URL: postgresql://usuario_pg:password_seguro@db:5432/pasarela_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
     ports:
       - "3004:3004"
     depends_on:
@@ -42,6 +48,9 @@ services:
         APP_NAME: conciliacion
     env_file:
       - ./Backend/.env
+    environment:
+      DATABASE_URL: postgresql://usuario_pg:password_seguro@db:5432/pasarela_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
     ports:
       - "3002:3002"
     depends_on:
@@ -55,10 +64,26 @@ services:
         APP_NAME: analitica
     env_file:
       - ./Backend/.env
+    environment:
+      DATABASE_URL: postgresql://usuario_pg:password_seguro@db:5432/pasarela_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
     ports:
       - "3003:3003"
     depends_on:
       - db
+
+  webhook-worker:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile.dev
+      args:
+        APP_NAME: webhook-worker
+    env_file:
+      - ./Backend/.env
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      - rabbitmq
 
   rabbitmq:
     image: rabbitmq:3.13-management
