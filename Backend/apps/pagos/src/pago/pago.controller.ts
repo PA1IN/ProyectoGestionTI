@@ -37,7 +37,7 @@ export class PagoController {
     return this.pagoService.processTransaction(token, checkoutDto);
   }
   @Post('checkout/:token/process/qr')
-  async processCheckoutQr(@Param('token') token: string, @Body() checkoutDto: CheckoutDto) {
+  async processCheckoutQr(@Param('token') token: string) {
     return this.pagoService.processQrTransaction(token);
   }
 
