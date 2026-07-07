@@ -15,6 +15,8 @@ import { HistorialTransaccion } from './entities/historial-transaccion.entity';
 import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.entity';
 import { MediosPagoService } from '../medios-pago/medios-pago.service';
 import { TarjetaService } from '../tarjeta/tarjeta.service';
+import { EstadoMandatoPagoDb, MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
+import { EstadoTarjetaGuardadaDb } from '../medios-pago/entities/tarjeta-guardada.entity';
 import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/entities/credencial-comercio.entity';
 import { CheckoutDetail, CheckoutQrResult, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult } from './types/pago-response.types';
 import { CheckoutPayload, TransactionPayload } from './types/pago-jwt-payload.types';
@@ -56,97 +58,14 @@ export class PagoService {
     const merchantCredential = await this.resolveMerchantCredential(merchantCredentialId);
     const cardRecord = await this.mediosPagoService.buscarTarjetaPorToken(dto.paymentMethodToken);
 
-    if (!cardRecord) {
+    if (!cardRecord || cardRecord.estado !== EstadoTarjetaGuardadaDb.ACTIVA) {
       throw new NotFoundException('Medio de pago no encontrado');
     }
 
     const mandato = await this.mediosPagoService.buscarMandatoPorTarjetaYComercio(dto.paymentMethodToken, merchantCredential.id);
 
     if (!mandato) {
-      const transactionId = randomUUID();
-      const queryRunner = this.dataSource.createQueryRunner();
-      await queryRunner.connect();
-      await queryRunner.startTransaction();
-
-      let transaccionRechazada: Transaccion;
-      try {
-        transaccionRechazada = await queryRunner.manager.save(
-          Transaccion,
-          queryRunner.manager.create(Transaccion, {
-            id: transactionId,
-            monto: dto.monto.toFixed(2),
-            moneda: dto.moneda.toUpperCase(),
-            estado: EstadoTransaccionDb.RECHAZADO,
-            idOrden: dto.idOrden,
-            tipoOperacion: TipoOperacionTransaccionDb.MIT,
-            merchantCredentialId: merchantCredential.id,
-            paymentMethodToken: dto.paymentMethodToken,
-            mandateId: null,
-          }),
-        );
-
-        await queryRunner.manager.save(
-          DetalleTransaccion,
-          queryRunner.manager.create(DetalleTransaccion, {
-            transaccion: transaccionRechazada,
-            nombreUsuario: dto.customer ?? 'MIT',
-            rut: '',
-            tipoPago: TipoPagoDb.TARJETA,
-            ultimosCuatro: cardRecord.last4,
-            cuotas: 0,
-            codigoAutorizacion: '',
-            emisorTarjeta: cardRecord.brand ?? 'UNKNOWN',
-            paymentMethodToken: dto.paymentMethodToken,
-          }),
-        );
-
-        await queryRunner.manager.save(
-          HistorialTransaccion,
-          queryRunner.manager.create(HistorialTransaccion, {
-            transaccion: transaccionRechazada,
-            statusFrom: EstadoTransaccionDb.PENDIENTE,
-            statusTo: EstadoTransaccionDb.RECHAZADO,
-          }),
-        );
-
-        await queryRunner.commitTransaction();
-      } catch (error) {
-        await queryRunner.rollbackTransaction();
-        throw error;
-      } finally {
-        await queryRunner.release();
-      }
-
-      await this.publicarEventoTransaccion({
-        merchantCredential,
-        eventType: 'intento_pago',
-        transactionId,
-        orderId: dto.idOrden,
-        subscriptionId: null,
-        monto: dto.monto,
-        moneda: dto.moneda.toUpperCase(),
-        tokenTransaccion: cardRecord.id,
-        approved: false,
-        codigoError: 'NO_MANDATE',
-        paymentMethodLast4: cardRecord.last4,
-        operationType: 'MIT',
-        publishExternal: true,
-      });
-
-      return {
-        status: EstadoRespuestaTransaccion.RECHAZADO,
-        message: 'No existe un mandato activo para este comercio',
-        transactionId: transaccionRechazada.id,
-        paymentMethodToken: dto.paymentMethodToken,
-        mandateId: null,
-        card: {
-          brand: cardRecord.brand,
-          last4: cardRecord.last4,
-          expMonth: cardRecord.expMonth,
-          expYear: cardRecord.expYear,
-        },
-        customer: dto.customer,
-      };
+      throw new NotFoundException('No existe un mandato activo para este comercio');
     }
 
     const existingTransaction = await this.transaccionRepository.findOne({
@@ -242,6 +161,8 @@ export class PagoService {
     await queryRunner.startTransaction();
 
     let transaccionFinal: Transaccion;
+    const rechazoPorFondosInsuficientes = estadoFinal === EstadoTransaccionDb.RECHAZADO
+      && this.errorHelper(bancoRespuesta.message) === 'insufficient_funds';
     try {
       transaccionFinal = await queryRunner.manager.save(
         Transaccion,
@@ -281,6 +202,16 @@ export class PagoService {
           statusTo: estadoFinal,
         }),
       );
+
+      if (rechazoPorFondosInsuficientes) {
+        await queryRunner.manager.save(
+          MandatoPago,
+          queryRunner.manager.create(MandatoPago, {
+            ...mandato,
+            estado: EstadoMandatoPagoDb.SUSPENDIDO,
+          }),
+        );
+      }
 
       await queryRunner.commitTransaction();
     } catch (error) {

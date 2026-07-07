@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { MandatoPago, EstadoMandatoPagoDb } from './entities/mandato-pago.entity';
 import { EstadoTarjetaGuardadaDb, TarjetaGuardada } from './entities/tarjeta-guardada.entity';
 import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/entities/credencial-comercio.entity';
@@ -123,9 +123,21 @@ export class MediosPagoService {
       where: {
         paymentMethodToken,
         merchantCredentialId,
-        estado: EstadoMandatoPagoDb.ACTIVO,
+        estado: In([EstadoMandatoPagoDb.ACTIVO, EstadoMandatoPagoDb.SUSPENDIDO]),
       },
     });
+  }
+
+  async revocarMandatosPorTarjetaToken(paymentMethodToken: string) {
+    await this.mandatoPagoRepository.update(
+      {
+        paymentMethodToken,
+        estado: In([EstadoMandatoPagoDb.ACTIVO, EstadoMandatoPagoDb.SUSPENDIDO]),
+      },
+      {
+        estado: EstadoMandatoPagoDb.REVOCADO,
+      },
+    );
   }
 
   private detectarMarca(numeroPan: string) {
@@ -204,6 +216,7 @@ export class MediosPagoService {
 
     tarjeta.estado = EstadoTarjetaGuardadaDb.ELIMINADA;
     await this.tarjetaGuardadaRepository.save(tarjeta);
+    await this.revocarMandatosPorTarjetaToken(tarjeta.id);
     return {
       status: EstadoRespuestaTransaccion.APROBADO,
       message: 'Tarjeta eliminada correctamente',

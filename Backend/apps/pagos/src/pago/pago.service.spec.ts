@@ -8,7 +8,8 @@ import { MediosPagoService } from '../medios-pago/medios-pago.service';
 import { ComerciosService } from '../comercios/comercios.service';
 import { TarjetaService } from '../tarjeta/tarjeta.service';
 import { TarjetaGuardada } from '../medios-pago/entities/tarjeta-guardada.entity';
-import { MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
+import { EstadoMandatoPagoDb, MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
+import { EstadoTarjetaGuardadaDb } from '../medios-pago/entities/tarjeta-guardada.entity';
 import { CredencialComercio } from '../comercios/entities/credencial-comercio.entity';
 import { Transaccion } from './entities/transaccion.entity';
 import { HistorialTransaccion } from './entities/historial-transaccion.entity';
@@ -61,6 +62,7 @@ describe('PagoService', () => {
 
   const tarjetaServiceMock = {
     autorizarBanco: jest.fn(),
+    detectarMarcaTarjeta: jest.fn(() => 'VISA'),
   };
 
   const rmqServiceMock = {
@@ -194,7 +196,8 @@ describe('PagoService', () => {
       cvv: '123',
     });
 
-    expect(detalleRepositoryMock.save).toHaveBeenCalledWith(
+    expect(queryRunnerMock.manager.save).toHaveBeenCalledWith(
+      DetalleTransaccion,
       expect.objectContaining({
         tipoPago: TipoPagoDb.TARJETA,
         ultimosCuatro: '1111',
@@ -204,7 +207,13 @@ describe('PagoService', () => {
     );
     expect(tarjetaServiceMock.autorizarBanco).toHaveBeenCalled();
     expect(mediosPagoServiceMock.guardarTarjeta).not.toHaveBeenCalled();
-    expect(historialRepositoryMock.save).toHaveBeenCalled();
+    expect(queryRunnerMock.manager.save).toHaveBeenCalledWith(
+      HistorialTransaccion,
+      expect.objectContaining({
+        statusFrom: EstadoTransaccionDb.PENDIENTE,
+        statusTo: EstadoTransaccionDb.APROBADO,
+      }),
+    );
     expect(rmqServiceMock.publish).toHaveBeenCalledWith(
       'analitica.eventos.transacciones',
       expect.objectContaining({
@@ -340,6 +349,7 @@ describe('PagoService', () => {
     });
     mediosPagoServiceMock.buscarTarjetaPorToken.mockResolvedValue({
       id: 'card-1',
+      estado: EstadoTarjetaGuardadaDb.ACTIVA,
       brand: 'VISA',
       last4: '4444',
       expMonth: 12,
@@ -373,7 +383,7 @@ describe('PagoService', () => {
       expect.objectContaining({
         event_type: 'intento_pago',
         payload: expect.objectContaining({
-          transaction_id: 'tx-mit-1',
+          transaction_id: expect.any(String),
           order_id: 'ORD-MIT-1',
           subscription_id: 'md-1',
           token_transaccion: 'card-1',
@@ -391,6 +401,101 @@ describe('PagoService', () => {
             approved: true,
             subscription_id: 'md-1',
             token_transaccion: 'card-1',
+            transaction_id: expect.any(String),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('processMitPayment debe rechazar sin persistir cuando no existe mandato', async () => {
+    credencialComercioRepositoryMock.findOne.mockResolvedValue({
+      id: 'mc-1',
+      estado: 'ACTIVA',
+      nombreComercio: 'Demo',
+      webhookUrl: 'http://merchant.local/webhook',
+    });
+    mediosPagoServiceMock.buscarTarjetaPorToken.mockResolvedValue({
+      id: 'card-no-mandate',
+      estado: EstadoTarjetaGuardadaDb.ACTIVA,
+      brand: 'VISA',
+      last4: '4444',
+      expMonth: 12,
+      expYear: 2028,
+      holderName: 'Juan Perez',
+      numeroPan: '1111222233334444',
+    });
+    mediosPagoServiceMock.buscarMandatoPorTarjetaYComercio.mockResolvedValue(null);
+
+    await expect(service.processMitPayment({
+      idOrden: 'ORD-MIT-NO-MANDATE',
+      monto: 2500,
+      moneda: 'clp',
+      paymentMethodToken: '11111111-1111-4111-8111-111111111111',
+      customer: 'Cliente Demo',
+    }, 'mc-1')).rejects.toThrow('No existe un mandato activo para este comercio');
+
+    expect(dataSourceMock.createQueryRunner).not.toHaveBeenCalled();
+    expect(rmqServiceMock.publish).not.toHaveBeenCalled();
+  });
+
+  it('processMitPayment debe continuar con mandato suspendido', async () => {
+    credencialComercioRepositoryMock.findOne.mockResolvedValue({
+      id: 'mc-1',
+      estado: 'ACTIVA',
+      nombreComercio: 'Demo',
+      webhookUrl: 'http://merchant.local/webhook',
+    });
+    mediosPagoServiceMock.buscarTarjetaPorToken.mockResolvedValue({
+      id: 'card-suspended',
+      estado: EstadoTarjetaGuardadaDb.ACTIVA,
+      brand: 'VISA',
+      last4: '4444',
+      expMonth: 12,
+      expYear: 2028,
+      holderName: 'Juan Perez',
+      numeroPan: '1111222233334444',
+    });
+    mediosPagoServiceMock.buscarMandatoPorTarjetaYComercio.mockResolvedValue({
+      id: 'md-suspended',
+      estado: EstadoMandatoPagoDb.SUSPENDIDO,
+    });
+    transaccionRepositoryMock.findOne.mockResolvedValue(null);
+    tarjetaServiceMock.autorizarBanco.mockResolvedValue({
+      estado: 'APROBADA',
+      message: 'Pago aprobado',
+    });
+    transaccionRepositoryMock.save.mockResolvedValue({
+      id: 'tx-mit-suspended',
+      estado: EstadoTransaccionDb.APROBADO,
+      rrn: 123456,
+    });
+
+    const result = await service.processMitPayment({
+      idOrden: 'ORD-MIT-SUSPENDED',
+      monto: 2500,
+      moneda: 'clp',
+      paymentMethodToken: '11111111-1111-4111-8111-111111111111',
+      customer: 'Cliente Demo',
+    }, 'mc-1');
+
+    expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
+    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
+      'pagos.notificaciones.webhooks',
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          event_type: 'intento_pago',
+        }),
+      }),
+    );
+    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
+      'pagos.notificaciones.webhooks',
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          event_type: 'confirmar_pago',
+          payload: expect.objectContaining({
+            approved: true,
+            subscription_id: 'md-suspended',
           }),
         }),
       }),
@@ -406,6 +511,7 @@ describe('PagoService', () => {
     });
     mediosPagoServiceMock.buscarTarjetaPorToken.mockResolvedValue({
       id: 'card-2',
+      estado: EstadoTarjetaGuardadaDb.ACTIVA,
       brand: 'VISA',
       last4: '4444',
       expMonth: 12,
@@ -439,7 +545,7 @@ describe('PagoService', () => {
       expect.objectContaining({
         event_type: 'confirmar_pago',
         payload: expect.objectContaining({
-          transaction_id: 'tx-mit-2',
+          transaction_id: expect.any(String),
           order_id: 'ORD-MIT-2',
           approved: false,
           codigo_error: 'insufficient_funds',
@@ -458,8 +564,16 @@ describe('PagoService', () => {
             codigo_error: 'insufficient_funds',
             subscription_id: 'md-1',
             token_transaccion: 'card-2',
+            transaction_id: expect.any(String),
           }),
         }),
+      }),
+    );
+    expect(queryRunnerMock.manager.save).toHaveBeenCalledWith(
+      MandatoPago,
+      expect.objectContaining({
+        id: 'md-1',
+        estado: EstadoMandatoPagoDb.SUSPENDIDO,
       }),
     );
   });
