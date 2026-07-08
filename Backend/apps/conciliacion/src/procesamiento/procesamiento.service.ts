@@ -83,6 +83,7 @@ export class ProcesamientoService {
         columns: true,
         skip_empty_lines: true,
         trim: true,
+        bom: true,
       }) as Record<string, string>[];
     } catch {
       throw new BadRequestException(

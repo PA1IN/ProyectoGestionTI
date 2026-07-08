@@ -1,4 +1,5 @@
-import { Body, Controller, Get, NotFoundException, Param, ParseIntPipe, Patch } from '@nestjs/common';
+import { Body, BadRequestException, Controller, Get, NotFoundException, Param, ParseIntPipe, Patch, Post, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { ConciliacionService } from './conciliacion.service';
 
 const USUARIO_SISTEMA_UUID = '00000000-0000-0000-0000-000000000000';
@@ -42,5 +43,27 @@ export class ConciliacionController {
   @Get()
   async getAllDiscrepancies() {
     return this.conciliacionService.getAllDiscrepancies();
+  }
+
+@Post('exportar-csv')
+  async exportarCsv(
+    @Body() body: { simulation: string | boolean; prob?: number },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (body?.simulation === undefined || body?.simulation === null) {
+      throw new BadRequestException('El campo "simulation" es obligatorio');
+    }
+
+    const { csv, filasFalladas } = await this.conciliacionService.exportarTransaccionesCsv(
+      body.simulation,
+      body.prob,
+    );
+
+    res.setHeader('X-Filas-Afectadas', String(filasFalladas));
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="conciliacion_temporal.csv"');
+
+    return `\ufeff${csv}`;
   }
 }
