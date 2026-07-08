@@ -8,14 +8,17 @@ export class WebhooksWorkerService implements OnModuleInit {
 
   async onModuleInit() {
     await this.rmqService.consume<WebhookJob<unknown>>('pagos.notificaciones.webhooks', async (payload) => {
-      await this.enviarWebhookACliente(payload.targetUrl, payload.payload);
+      await this.enviarWebhookACliente(payload.targetUrl, payload.payload, payload.headers);
     });
   }
 
-  private async enviarWebhookACliente(url: string, data: any) {
+  private async enviarWebhookACliente(url: string, data: any, headers?: Record<string, string>) {
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(headers ?? {}),
+      },
       body: JSON.stringify(data),
     });
 

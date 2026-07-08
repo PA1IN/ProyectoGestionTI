@@ -199,6 +199,9 @@ export class ConciliacionService {
         await this.rmqService.publish<WebhookJob<ConciliationAlert>>('pagos.notificaciones.webhooks', {
           targetUrl: webhookUrl,
           payload: alerta,
+          headers: process.env.PROY11_WEBHOOK_API_KEY
+            ? { 'x-api-key': process.env.PROY11_WEBHOOK_API_KEY }
+            : undefined,
         });
       }
     }

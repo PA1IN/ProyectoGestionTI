@@ -14,7 +14,7 @@ import { IS_PUBLIC_KEY } from './public.decorator';
 
 @Injectable()
 export class KeycloakAuthGuard implements CanActivate {
-  private readonly keycloakClientId = 'proyecto-4-frontend';
+  private readonly keycloakClientId = 'p4' ;//'proyecto-4-frontend';
 
   constructor(
     private readonly reflector: Reflector,

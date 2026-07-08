@@ -6,6 +6,7 @@ export const CONCILIATION_ALERTS_ANALYTICS_QUEUE = 'analitica.alertas.conciliaci
 export type WebhookJob<TPayload> = {
   targetUrl: string;
   payload: TPayload;
+  headers?: Record<string, string>;
 };
 
 export type TransactionIntentEventPayload = {

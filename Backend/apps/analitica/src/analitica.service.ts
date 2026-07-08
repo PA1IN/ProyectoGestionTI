@@ -166,6 +166,9 @@ export class AnaliticaService implements OnModuleInit {
       await this.rmqService.publish<WebhookJob<TransactionAlert>>('pagos.notificaciones.webhooks', {
         targetUrl: params.webhookUrl,
         payload: alertaRetry.payload as unknown as TransactionAlert,
+        headers: process.env.PROY11_WEBHOOK_API_KEY
+          ? { 'x-api-key': process.env.PROY11_WEBHOOK_API_KEY }
+          : undefined,
       });
     }
   }
