@@ -55,6 +55,7 @@ export type CreateTransactionResult = {
 export type CheckoutQrResult = TransactionResponseBase & {
   qrData: string;
   codigoQr: string;
+  returnUrl: string;
 };
 
 export type CheckoutDetail = {

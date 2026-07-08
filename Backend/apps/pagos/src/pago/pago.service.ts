@@ -592,6 +592,7 @@ export class PagoService implements OnModuleInit {
         message: 'QR generado correctamente',
         transactionId: transaccion.id,
         qrData,
+        returnUrl: payload.returnUrl,
         codigoQr: qrData,
       };
     } catch (error) {
