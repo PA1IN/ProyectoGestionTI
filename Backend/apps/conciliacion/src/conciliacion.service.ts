@@ -161,6 +161,11 @@ export class ConciliacionService {
       await queryRunner.release();
     }
   }
+  async getAllDiscrepancies(): Promise<DiscrepanciaConciliacion[]> {
+    return this.discrepanciaRepository.find({
+      order: { created_at: 'DESC' }, 
+    });
+  }
 
   private async publicarAlertasConciliacion(discrepancias: DiscrepanciaResumen[], archivoId: string): Promise<void> {
     const webhookUrl = this.configService.get<string>('CONCILIATION_WEBHOOK_URL') || null;

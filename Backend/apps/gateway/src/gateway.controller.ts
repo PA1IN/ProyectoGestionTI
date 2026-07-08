@@ -232,6 +232,24 @@ export class GatewayController {
     );
   }
 
+  @Get('conciliacion/discrepancias')
+  @AdminOnly() 
+  async getAllDiscrepancies(
+    @Headers() headers: IncomingHttpHeaders,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.relay(
+      response,
+      this.gatewayService.forwardJsonRequest(
+        this.gatewayService.conciliacionBaseUrl,
+        '/conciliacion/discrepancias',
+        'GET',
+        undefined,
+        headers,
+      ),
+    );
+  }
+
   @Post('ucnpay/init/suscription')
   @Public()
   async tokenizeMit(

@@ -38,4 +38,9 @@ export class ConciliacionController {
 
     return discrepancia;
   }
+
+  @Get('discrepancias')
+  async getAllDiscrepancies() {
+    return this.conciliacionService.getAllDiscrepancies();
+  }
 }
