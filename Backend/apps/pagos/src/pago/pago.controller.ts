@@ -76,4 +76,8 @@ export class PagoController {
   getHistorialTransaccion(@Param('id') id: string) {
     return this.pagoService.getHistorialTransaccion(id);
   }
+  @Get('comprobante/:transactionId')
+  async getComprobante(@Param('transactionId') transactionId: string) {
+    return this.pagoService.getComprobante(transactionId);
+  }
 }

@@ -1256,5 +1256,40 @@ export class PagoService implements OnModuleInit {
 
     await this.notificarWebhookComercio(merchantCredential, payload);
   }
+
+  async getComprobante(transactionId: string) {
+    const transaccion = await this.transaccionRepository.findOne({
+      where: { id: transactionId },
+      
+      relations: ['detalles'], 
+    });
+
+    if (!transaccion) {
+      throw new NotFoundException('Transacción no encontrada');
+    }
+
+    
+    let comercio: CredencialComercio | null = null;
+    
+    if (transaccion.merchantCredentialId) {
+      comercio = await this.credencialComercioRepository.findOne({
+        where: { id: transaccion.merchantCredentialId }
+      });
+    }
+    
+    return {
+      montoTotal: Number(transaccion.monto),
+      moneda: transaccion.moneda,
+      nombreComercio: comercio?.nombreComercio ?? 'Comercio no registrado',
+      
+      fechaHora: transaccion['createdAt'] ?? new Date().toISOString(), 
+      numeroOrden: transaccion.idOrden,
+      estado: transaccion.estado,
+      
+      codigoAutorizacion: transaccion.detalles?.[0]?.codigoAutorizacion ?? null,
+      metodoPago: transaccion.detalles?.[0]?.tipoPago ?? null,
+      ultimosCuatro: transaccion.detalles?.[0]?.ultimosCuatro ?? null,
+    };
+  }
   
 }

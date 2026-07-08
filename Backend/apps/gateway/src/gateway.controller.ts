@@ -423,6 +423,24 @@ export class GatewayController {
       ),
     );
   }
+  @Get('ucnpay/comprobante/:transactionId')
+  @Public()
+  async getComprobanteBoleta(
+    @Param('transactionId') transactionId: string,
+    @Headers() headers: IncomingHttpHeaders,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.relay(
+      response,
+      this.gatewayService.forwardJsonRequest(
+        this.gatewayService.pagosBaseUrl,
+        `/ucnpay/comprobante/${transactionId}`,
+        'GET',
+        undefined,
+        headers,
+      ),
+    );
+  }
 
   @Patch('conciliacion/discrepancias/:rrn')
   @AdminOnly()
