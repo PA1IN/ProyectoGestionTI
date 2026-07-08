@@ -501,6 +501,7 @@ export class PagoService implements OnModuleInit {
         comercio: merchantCredential?.nombreComercio ?? payload.nombreComercio,
         montoTotal: payload.monto,
         moneda: payload.moneda,
+        returnUrl: payload.returnUrl,
         estado,
         tarjeta: detalle
           ? {

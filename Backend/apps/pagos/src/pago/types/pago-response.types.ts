@@ -63,6 +63,7 @@ export type CheckoutDetail = {
   comercio: string;
   montoTotal: number;
   moneda: string;
+  returnUrl: string;
   estado: EstadoRespuestaTransaccion;
   tarjeta: {
     marca: string | null;
