@@ -32,8 +32,8 @@ const PAYMENT_EXPIRATION_QUEUE = 'pagos.expiracion';
 const PAYMENT_EXPIRATION_DLX = 'pagos.expiracion.dlx';
 const PAYMENT_EXPIRATION_DLQ = 'pagos.expiracion.dlq';
 const PAYMENT_EXPIRATION_TTL_MS = 5 * 60 * 1000;
-const ANALYTICS_WEBHOOK_URL = 'https://analisis-proyecto-ti.onrender.com/v1/events';
-const ALERTAS_WEBHOOK_URL = 'https://proyecto11-mochicode.onrender.com/api/v1/alertas';
+const ANALYTICS_WEBHOOK_URL = 'http://localhost:8000/log';//'https://analisis-proyecto-ti.onrender.com/v1/events';
+const ALERTAS_WEBHOOK_URL = 'http://localhost:8000/log';//https://proyecto11-mochicode.onrender.com/api/v1/alertas';
 
 type PaymentExpirationJob = {
   transactionId: string;
