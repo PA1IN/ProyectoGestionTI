@@ -84,44 +84,34 @@ export function useProcesarPago(tokenTransaccion: string) {
 }
 
 // solicita el texto del qr al backend
-/*export function useGenerarQr(tokenTransaccion: string) {
-    return useMutation({
-        mutationFn: async () => {
-            const respuesta = await api.post('/pagos/generar-qr', { metodo: 'billetera' }, { 
-                headers: {
-                    'X-Transaction-Token': tokenTransaccion
-                }
-             });
-             return respuesta.data;
-        }
-    });
-}*/
-
-
 export function useGenerarQr(tokenTransaccion: string) {
+    return useQuery({
+        queryKey: ['qrData', tokenTransaccion],
+        queryFn: async () => {
+            const respuesta = await api.get(`/ucnpay/checkout/${tokenTransaccion}/qr`);
+            return respuesta.data;
+        },
+        enabled: !!tokenTransaccion,
+        refetchOnWindowFocus: false, // no volver a ejecutar la consulta al cambiar de ventana
+    }); 
+}
+
+
+export function useProcesarPagoQr(tokenTransaccion: string) {
     return useMutation({
-        mutationFn: async () => {
-            const respuesta = await api.get(`/ucnpay/checkout/${tokenTransaccion}`);
-            return { qrData: respuesta.data.codigoQr as string | undefined };
+        mutationFn: async (tokenQr: string) => {
+            const respuesta = await api.post(
+                `/ucnpay/checkout/${tokenTransaccion}/process-qr`,
+                { qrData:tokenQr }
+            );
+            return respuesta.data;
         }
     });
 }
 
 
+
 // pregunta al backend si el usuario ya escaneo y pago el qr
-/*export function useConsultarEstadoPago(tokenTransaccion: string, activarPolling: boolean) {
-    return useQuery({
-        queryKey: ['estadoPago', tokenTransaccion],
-        queryFn: async () => {
-            const respuesta = await api.get(`/pagos/estado/${tokenTransaccion}`);
-            return respuesta.data;
-        }
-        enabled: activarPolling,    
-        refetchInterval: 3000,
-    })
-}*/
-
-
 export function useConsultarEstadoPago(tokenTransaccion: string, activarPolling: boolean)
 {
     return useQuery({
@@ -131,6 +121,6 @@ export function useConsultarEstadoPago(tokenTransaccion: string, activarPolling:
             return { estado: respuesta.data.estado as string };
         },
         enabled: activarPolling,
-        
+        refetchInterval: 2000,
     })
 }
