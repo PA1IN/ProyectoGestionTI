@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
@@ -18,23 +18,55 @@ import { TarjetaService } from '../tarjeta/tarjeta.service';
 import { EstadoMandatoPagoDb, MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
 import { EstadoTarjetaGuardadaDb } from '../medios-pago/entities/tarjeta-guardada.entity';
 import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/entities/credencial-comercio.entity';
-import { CheckoutDetail, CheckoutQrResult, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult } from './types/pago-response.types';
+import { CheckoutDetail, CheckoutQrResult, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult, TransactionWebhookPayload } from './types/pago-response.types';
 import { CheckoutPayload, TransactionPayload } from './types/pago-jwt-payload.types';
 import { BancoEstadoOperacion } from '../tarjeta/types/banco.types';
 import {
   RabbitMqService,
-  TRANSACTION_ALERTS_ANALYTICS_QUEUE,
-  TRANSACTION_EVENTS_ANALYTICS_QUEUE,
   AnalyticsTransactionEvent,
+  TRANSACTION_EVENTS_ANALYTICS_QUEUE,
   TransactionAlert,
-  TransactionWebhookErrorCode,
-  TransactionWebhookEvent,
-  WebhookJob,
 } from '@app/rmq';
 
+const PAYMENT_EXPIRATION_QUEUE = 'pagos.expiracion';
+const PAYMENT_EXPIRATION_DLX = 'pagos.expiracion.dlx';
+const PAYMENT_EXPIRATION_DLQ = 'pagos.expiracion.dlq';
+const PAYMENT_EXPIRATION_TTL_MS = 5 * 60 * 1000;
+const ANALYTICS_WEBHOOK_URL = 'https://analisis-proyecto-ti.onrender.com/v1/events';
+const ALERTAS_WEBHOOK_URL = 'https://proyecto11-mochicode.onrender.com/api/v1/alertas';
+
+type PaymentExpirationJob = {
+  transactionId: string;
+  createdAt: string;
+};
+
+type Project9IntentPayload = {
+  transaction_id: string;
+  order_id: string | null;
+  subscription_id?: string | null;
+  monto: string;
+  token_transaccion: string;
+  timestamp_evento: string;
+};
+
+type Project9ConfirmPayload = {
+  transaction_id: string;
+  approved: boolean;
+  codigo_error: 'insufficient_funds' | 'rejected' | null;
+  token_transaccion: string;
+  timestamp_evento: string;
+};
+
+type Project9Event = {
+  source: 'payments';
+  event_type: 'intento_pago' | 'confirmar_pago';
+  payload: Project9IntentPayload | Project9ConfirmPayload;
+};
+
 @Injectable()
-export class PagoService {
+export class PagoService implements OnModuleInit {
   private readonly logger = new Logger(PagoService.name);
+  private expirationInfrastructureReady?: Promise<void>;
 
   constructor(
     private readonly jwtService: JwtService,
@@ -53,6 +85,10 @@ export class PagoService {
     @InjectRepository(DetalleTransaccion)
     private readonly detalleRepository: Repository<DetalleTransaccion>,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    await this.ensureExpirationInfrastructure();
+  }
 
   async processMitPayment(dto: MitDto, merchantCredentialId: string): Promise<MitPaymentResult> {
     const merchantCredential = await this.resolveMerchantCredential(merchantCredentialId);
@@ -117,6 +153,7 @@ export class PagoService {
     }
 
     const transactionId = randomUUID();
+    const rrn = this.generarRrn();
     const transaccionBase = {
       id: transactionId,
       monto: dto.monto.toFixed(2),
@@ -127,9 +164,10 @@ export class PagoService {
       merchantCredentialId: merchantCredential.id,
       paymentMethodToken: dto.paymentMethodToken,
       mandateId: mandato.id,
+      rrn,
     };
 
-    await this.publicarEventoTransaccion({
+    await this.publicarEventoAnalitica({
       merchantCredential,
       eventType: 'intento_pago',
       transactionId,
@@ -137,12 +175,11 @@ export class PagoService {
       subscriptionId: mandato.id,
       monto: dto.monto,
       moneda: dto.moneda.toUpperCase(),
-      tokenTransaccion: cardRecord.id,
+      tokenTransaccion: mandato.id,
       approved: false,
       codigoError: null,
       paymentMethodLast4: cardRecord.last4,
       operationType: 'MIT',
-      publishExternal: true,
     });
 
     const bancoRespuesta = await this.tarjetaService.autorizarBanco({
@@ -169,7 +206,6 @@ export class PagoService {
         queryRunner.manager.create(Transaccion, {
           ...transaccionBase,
           estado: estadoFinal,
-          rrn: Math.floor(100000 + Math.random() * 900000),
           tipoOperacion: TipoOperacionTransaccionDb.MIT,
           paymentMethodToken: dto.paymentMethodToken,
           mandateId: mandato.id,
@@ -222,7 +258,7 @@ export class PagoService {
     }
 
     if (estadoFinal === EstadoTransaccionDb.RECHAZADO) {
-      await this.publicarEventoTransaccion({
+      await this.publicarEventoAnalitica({
         merchantCredential,
         eventType: 'confirmar_pago',
         transactionId: transaccionFinal.id,
@@ -230,12 +266,31 @@ export class PagoService {
         subscriptionId: mandato.id,
         monto: dto.monto,
         moneda: dto.moneda.toUpperCase(),
-        tokenTransaccion: cardRecord.id,
+        tokenTransaccion: mandato.id,
         approved: false,
         codigoError: this.errorHelper(bancoRespuesta.message),
         paymentMethodLast4: cardRecord.last4,
         operationType: 'MIT',
-        publishExternal: true,
+      });
+
+      await this.notificarWebhookComercio(merchantCredential, {
+        event: 'transaction.rejected',
+        transactionId: transaccionFinal.id,
+        idOrden: dto.idOrden,
+        operationType: 'MIT',
+        status: EstadoRespuestaTransaccion.RECHAZADO,
+        monto: dto.monto,
+        moneda: dto.moneda.toUpperCase(),
+        mandateId: mandato.id,
+        paymentMethodToken: dto.paymentMethodToken,
+        customer: dto.customer,
+        card: {
+          brand: cardRecord.brand,
+          last4: cardRecord.last4,
+          expMonth: cardRecord.expMonth,
+          expYear: cardRecord.expYear,
+        },
+        timestamp: new Date().toISOString(),
       });
 
       return {
@@ -254,7 +309,7 @@ export class PagoService {
       };
     }
 
-    await this.publicarEventoTransaccion({
+    await this.publicarEventoAnalitica({
       merchantCredential,
       eventType: 'confirmar_pago',
       transactionId: transaccionFinal.id,
@@ -262,12 +317,31 @@ export class PagoService {
       subscriptionId: mandato.id,
       monto: dto.monto,
       moneda: dto.moneda.toUpperCase(),
-      tokenTransaccion: cardRecord.id,
+      tokenTransaccion: mandato.id,
       approved: true,
       codigoError: null,
       paymentMethodLast4: cardRecord.last4,
       operationType: 'MIT',
-      publishExternal: true,
+    });
+
+    await this.notificarWebhookComercio(merchantCredential, {
+      event: 'transaction.approved',
+      transactionId: transaccionFinal.id,
+      idOrden: dto.idOrden,
+      operationType: 'MIT',
+      status: EstadoRespuestaTransaccion.APROBADO,
+      monto: dto.monto,
+      moneda: dto.moneda.toUpperCase(),
+      mandateId: mandato.id,
+      paymentMethodToken: dto.paymentMethodToken,
+      customer: dto.customer,
+      card: {
+        brand: cardRecord.brand,
+        last4: cardRecord.last4,
+        expMonth: cardRecord.expMonth,
+        expYear: cardRecord.expYear,
+      },
+      timestamp: new Date().toISOString(),
     });
 
     return {
@@ -335,6 +409,7 @@ export class PagoService {
     }
 
     const transactionId = randomUUID();
+    const rrn = this.generarRrn();
 
     const payload: TransactionPayload = {
       transactionId,
@@ -360,10 +435,13 @@ export class PagoService {
         merchantCredentialId: merchantCredential.id,
         paymentMethodToken: null,
         mandateId: null,
+        rrn,
       }),
     );
 
-    await this.publicarEventoTransaccion({
+    await this.programarExpiracionTransaccion(transactionId);
+
+    await this.publicarEventoAnalitica({
       merchantCredential,
       eventType: 'intento_pago',
       transactionId,
@@ -375,7 +453,6 @@ export class PagoService {
       codigoError: null,
       paymentMethodLast4: null,
       operationType: 'CIT',
-      publishExternal: true,
     });
 
     return {
@@ -559,7 +636,6 @@ export class PagoService {
           queryRunner.manager.create(Transaccion, {
             ...transaccion,
             estado: estadoFinal,
-            rrn: Math.floor(100000 + Math.random() * 900000),
             tipoOperacion: TipoOperacionTransaccionDb.CIT,
             paymentMethodToken: null,
             mandateId: null,
@@ -602,7 +678,7 @@ export class PagoService {
       }
 
       if (estadoFinal === EstadoTransaccionDb.RECHAZADO) {
-        await this.publicarEventoTransaccion({
+        await this.publicarEventoAnalitica({
           merchantCredential,
           eventType: 'confirmar_pago',
           transactionId: transaccionFinal.id,
@@ -614,7 +690,23 @@ export class PagoService {
           codigoError: this.errorHelper(bancoRespuesta.message),
           paymentMethodLast4: last4,
           operationType: 'CIT',
-          publishExternal: true,
+        });
+
+        await this.notificarWebhookComercio(merchantCredential, {
+          event: 'transaction.rejected',
+          transactionId: transaccionFinal.id,
+          idOrden: payload.idOrden,
+          operationType: 'CIT',
+          status: EstadoRespuestaTransaccion.RECHAZADO,
+          monto: payload.monto,
+          moneda: payload.moneda,
+          card: {
+            brand,
+            last4,
+            expMonth: this.parseMonthFromExpiry(checkoutDto.fechaExpiracion),
+            expYear: this.parseYearFromExpiry(checkoutDto.fechaExpiracion),
+          },
+          timestamp: new Date().toISOString(),
         });
 
         return {
@@ -630,7 +722,7 @@ export class PagoService {
         };
       }
 
-      await this.publicarEventoTransaccion({
+      await this.publicarEventoAnalitica({
         merchantCredential,
         eventType: 'confirmar_pago',
         transactionId: transaccionFinal.id,
@@ -642,7 +734,23 @@ export class PagoService {
         codigoError: null,
         paymentMethodLast4: last4,
         operationType: 'CIT',
-        publishExternal: true,
+      });
+
+      await this.notificarWebhookComercio(merchantCredential, {
+        event: 'transaction.approved',
+        transactionId: transaccionFinal.id,
+        idOrden: payload.idOrden,
+        operationType: 'CIT',
+        status: EstadoRespuestaTransaccion.APROBADO,
+        monto: payload.monto,
+        moneda: payload.moneda,
+        card: {
+          brand,
+          last4,
+          expMonth: this.parseMonthFromExpiry(checkoutDto.fechaExpiracion),
+          expYear: this.parseYearFromExpiry(checkoutDto.fechaExpiracion),
+        },
+        timestamp: new Date().toISOString(),
       });
 
       const isApproved = estadoFinal === EstadoTransaccionDb.APROBADO;
@@ -697,7 +805,7 @@ export class PagoService {
 
       const merchantIdToUse = merchantCredentialId ?? transaccion.merchantCredentialId;
       if (!merchantIdToUse) {
-      throw new UnauthorizedException('No se recibió credencial del comercio');
+        throw new UnauthorizedException('No se recibió credencial del comercio');
       }
       const merchantCredential = await this.resolveMerchantCredential(merchantIdToUse);
 
@@ -740,7 +848,6 @@ export class PagoService {
 
       // 5. Actualizar el estado de la transacción principal
       transaccion.estado = EstadoTransaccionDb.APROBADO;
-      transaccion.rrn = Math.floor(100000 + Math.random() * 900000);
       transaccion.tipoOperacion = TipoOperacionTransaccionDb.CIT;
       await this.transaccionRepository.save(transaccion);
 
@@ -753,16 +860,18 @@ export class PagoService {
         }),
       );
 
-      // 7. Notificar al comercio mediante el Webhook
-      await this.notificarWebhookComercio(merchantCredential, {
-        event: 'transaction.approved',
+      await this.publicarEventoAnalitica({
+      merchantCredential,
+        eventType: 'confirmar_pago',
         transactionId: transaccion.id,
-        idOrden: payload.idOrden,
-        operationType: 'CIT',
-        status: EstadoRespuestaTransaccion.APROBADO,
+        orderId: payload.idOrden,
         monto: payload.monto,
         moneda: payload.moneda,
-        timestamp: new Date().toISOString(),
+        tokenTransaccion: token,
+        approved: true,
+        codigoError: null,
+        paymentMethodLast4: null,
+        operationType: 'CIT',
       });
 
       // 8. Retornar la respuesta con la URL de redirección al flujo frontend
@@ -812,20 +921,10 @@ export class PagoService {
       return;
     }
 
-    try {
-      await this.rmqService.publish<WebhookJob<TPayload>>('pagos.notificaciones.webhooks', {
-        targetUrl: merchantCredential.webhookUrl,
-        payload,
-      });
-    } catch (error) {
-      this.logger.warn(
-        `No se pudo notificar webhook para ${merchantCredential.id}`,
-        error instanceof Error ? error.stack : String(error),
-      );
-    }
+    await this.enviarWebhookDirecto(merchantCredential.webhookUrl, payload, `merchant ${merchantCredential.id}`);
   }
 
-  private async publicarEventoTransaccion(params: {
+  private async publicarEventoAnalitica(params: {
     merchantCredential: CredencialComercio;
     eventType: 'intento_pago' | 'confirmar_pago';
     transactionId: string;
@@ -835,14 +934,13 @@ export class PagoService {
     moneda: string;
     tokenTransaccion: string;
     approved: boolean;
-    codigoError: string | null;
+    codigoError: 'insufficient_funds' | 'rejected' | null;
     paymentMethodLast4: string | null;
     operationType: 'CIT' | 'MIT';
-    publishExternal?: boolean;
   }): Promise<void> {
     const timestampEvento = new Date().toISOString();
 
-    const analyticsEvent: AnalyticsTransactionEvent = {
+    const analyticsRetryEvent: AnalyticsTransactionEvent = {
       source: 'payments',
       event_type: params.eventType,
       payload: {
@@ -850,7 +948,7 @@ export class PagoService {
         order_id: params.orderId,
         merchant_credential_id: params.merchantCredential.id,
         webhook_url: params.merchantCredential.webhookUrl ?? null,
-        subscription_id: params.subscriptionId ?? null,
+        ...(params.operationType === 'MIT' && params.subscriptionId ? { subscription_id: params.subscriptionId } : {}),
         monto: params.monto,
         moneda: params.moneda,
         token_transaccion: params.tokenTransaccion,
@@ -862,38 +960,34 @@ export class PagoService {
       },
     };
 
-    await this.publicarEnRabbitSeguro(TRANSACTION_EVENTS_ANALYTICS_QUEUE, analyticsEvent);
+    await this.publicarEnRabbitSeguro(TRANSACTION_EVENTS_ANALYTICS_QUEUE, analyticsRetryEvent);
 
-    if (params.publishExternal && params.merchantCredential.webhookUrl) {
-      const externalPayload: TransactionWebhookEvent = params.eventType === 'confirmar_pago'
-        ? {
-            source: 'payments',
-            event_type: 'confirmar_pago',
-            payload: {
-              transaction_id: params.transactionId,
-              order_id: params.orderId,
-              ...(params.subscriptionId ? { subscription_id: params.subscriptionId } : {}),
-              approved: params.approved,
-              codigo_error: params.codigoError as TransactionWebhookErrorCode | null,
-              token_transaccion: params.tokenTransaccion,
-              timestamp_evento: timestampEvento,
-            },
-          }
-        : {
-            source: 'payments',
-            event_type: 'intento_pago',
-            payload: {
-              transaction_id: params.transactionId,
-              order_id: params.orderId,
-              ...(params.subscriptionId ? { subscription_id: params.subscriptionId } : {}),
-              monto: params.monto,
-              token_transaccion: params.tokenTransaccion,
-              timestamp_evento: timestampEvento,
-            },
-          };
+    const analyticsEvent: Project9Event = params.eventType === 'intento_pago'
+      ? {
+          source: 'payments',
+          event_type: 'intento_pago',
+          payload: {
+            transaction_id: params.transactionId,
+            order_id: params.orderId,
+            ...(params.operationType === 'MIT' && params.subscriptionId ? { subscription_id: params.subscriptionId } : {}),
+            monto: params.monto.toFixed(2),
+            token_transaccion: params.tokenTransaccion,
+            timestamp_evento: timestampEvento,
+          },
+        }
+      : {
+          source: 'payments',
+          event_type: 'confirmar_pago',
+          payload: {
+            transaction_id: params.transactionId,
+            approved: params.approved,
+            codigo_error: params.codigoError,
+            token_transaccion: params.tokenTransaccion,
+            timestamp_evento: timestampEvento,
+          },
+        };
 
-      await this.notificarWebhookComercio(params.merchantCredential, externalPayload);
-    }
+    await this.enviarWebhookDirecto(ANALYTICS_WEBHOOK_URL, analyticsEvent, 'analytics');
   }
 
   private errorHelper(message: string | null): 'insufficient_funds' | 'rejected' {
@@ -922,10 +1016,7 @@ export class PagoService {
       },
     };
 
-    await Promise.all([
-      this.notificarWebhookComercio(params.merchantCredential, alerta),
-      this.publicarEnRabbitSeguro(TRANSACTION_ALERTS_ANALYTICS_QUEUE, alerta),
-    ]);
+    await this.enviarWebhookDirecto(ALERTAS_WEBHOOK_URL, alerta, 'alerts');
   }
 
   private async publicarEnRabbitSeguro<T>(queueName: string, payload: T): Promise<void> {
@@ -937,6 +1028,40 @@ export class PagoService {
         error instanceof Error ? error.stack : String(error),
       );
     }
+  }
+
+  private async enviarWebhookDirecto<TPayload>(url: string, payload: TPayload, context: string): Promise<void> {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo enviar webhook ${context} a ${url}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
+
+  private parseMonthFromExpiry(fechaExpiracion: string): number | null {
+    const month = Number(fechaExpiracion.split('/')[0]);
+    return Number.isFinite(month) ? month : null;
+  }
+
+  private parseYearFromExpiry(fechaExpiracion: string): number | null {
+    const [, yearPart = ''] = fechaExpiracion.split('/');
+    if (!yearPart) {
+      return null;
+    }
+
+    const normalizedYear = yearPart.length === 2 ? Number(`20${yearPart}`) : Number(yearPart);
+    return Number.isFinite(normalizedYear) ? normalizedYear : null;
   }
 
   async getDetalleTransaccion(id: number) {
@@ -985,6 +1110,103 @@ export class PagoService {
   async getAllHistoriales() {
     const historiales = await this.historialRepository.find({ relations: ['transaccion'] });
     return historiales;
+  }
+
+  private generarRrn(): number {
+    return Math.floor(100000 + Math.random() * 900000);
+  }
+
+  private async ensureExpirationInfrastructure(): Promise<void> {
+    if (!this.expirationInfrastructureReady) {
+      this.expirationInfrastructureReady = (async () => {
+        await this.rmqService.assertExchange(PAYMENT_EXPIRATION_DLX, 'direct', { durable: true });
+        await this.rmqService.assertQueue(PAYMENT_EXPIRATION_DLQ, { durable: true });
+        await this.rmqService.bindQueue(PAYMENT_EXPIRATION_DLQ, PAYMENT_EXPIRATION_DLX, PAYMENT_EXPIRATION_DLQ);
+        await this.rmqService.assertQueue(PAYMENT_EXPIRATION_QUEUE, {
+          durable: true,
+          arguments: {
+            'x-message-ttl': PAYMENT_EXPIRATION_TTL_MS,
+            'x-dead-letter-exchange': PAYMENT_EXPIRATION_DLX,
+            'x-dead-letter-routing-key': PAYMENT_EXPIRATION_DLQ,
+          },
+        });
+
+        await this.rmqService.consume<PaymentExpirationJob>(PAYMENT_EXPIRATION_DLQ, async (payload) => {
+          await this.procesarExpiracionTransaccion(payload.transactionId);
+        });
+      })().catch((error) => {
+        this.expirationInfrastructureReady = undefined;
+        throw error;
+      });
+    }
+
+    await this.expirationInfrastructureReady;
+  }
+
+  private async programarExpiracionTransaccion(transactionId: string): Promise<void> {
+    await this.ensureExpirationInfrastructure();
+
+    await this.publicarEnRabbitSeguro(PAYMENT_EXPIRATION_QUEUE, {
+      transactionId,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  private async procesarExpiracionTransaccion(transactionId: string): Promise<void> {
+    const transaccion = await this.transaccionRepository.findOne({
+      where: { id: transactionId },
+      relations: ['detalles'],
+    });
+
+    if (!transaccion || transaccion.estado !== EstadoTransaccionDb.PENDIENTE) {
+      return;
+    }
+
+    const estadoAnterior = transaccion.estado;
+    transaccion.estado = EstadoTransaccionDb.RECHAZADO;
+
+    await this.transaccionRepository.save(transaccion);
+
+    await this.historialRepository.save(
+      this.historialRepository.create({
+        transaccion,
+        statusFrom: estadoAnterior,
+        statusTo: EstadoTransaccionDb.RECHAZADO,
+      }),
+    );
+
+    if (!transaccion.merchantCredentialId) {
+      return;
+    }
+
+    const merchantCredential = await this.credencialComercioRepository.findOne({
+      where: { id: transaccion.merchantCredentialId, estado: EstadoCredencialComercioDb.ACTIVA },
+    });
+
+    if (!merchantCredential) {
+      return;
+    }
+
+    const payload: TransactionWebhookPayload = {
+      event: 'transaction.rejected',
+      transactionId: transaccion.id,
+      idOrden: transaccion.idOrden,
+      operationType: transaccion.tipoOperacion ?? TipoOperacionTransaccionDb.CIT,
+      status: EstadoRespuestaTransaccion.RECHAZADO,
+      monto: Number(transaccion.monto),
+      moneda: transaccion.moneda,
+      card: transaccion.detalles?.[0]
+        ? {
+            brand: transaccion.detalles[0].emisorTarjeta ?? null,
+            last4: transaccion.detalles[0].ultimosCuatro ?? null,
+            expMonth: null,
+            expYear: null,
+          }
+        : null,
+      timestamp: new Date().toISOString(),
+    };
+
+    await this.notificarWebhookComercio(merchantCredential, payload);
   }
   
 }

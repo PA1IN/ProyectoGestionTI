@@ -120,7 +120,6 @@ POST `https://tu-comercio/endpoint`
     "expMonth": 12,
     "expYear": 2028
   },
-  "reason": "Fondos insuficientes",
   "timestamp": "2026-06-24T18:00:00.000Z"
 }
 ```

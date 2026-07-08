@@ -8,10 +8,11 @@ export class RabbitMqService implements OnModuleDestroy {
   private connection?: any;
   private channel?: any;
   private readonly assertedQueues = new Set<string>();
+  private readonly assertedExchanges = new Set<string>();
 
   constructor(private readonly configService: ConfigService) {}
 
-  private async getChannel(queueName: string): Promise<any> {
+  private async getConnectionChannel(): Promise<any> {
     const rabbitMqUrl = this.configService.get<string>('RABBITMQ_URL') || 'amqp://localhost:5672';
 
     if (!this.channel) {
@@ -19,12 +20,40 @@ export class RabbitMqService implements OnModuleDestroy {
       this.channel = await this.connection.createChannel();
     }
 
+    return this.channel;
+  }
+
+  private async getChannel(queueName: string): Promise<any> {
+    const channel = await this.getConnectionChannel();
+
     if (!this.assertedQueues.has(queueName)) {
-      await this.channel.assertQueue(queueName, { durable: true });
-      this.assertedQueues.add(queueName);
+      await this.assertQueue(queueName, { durable: true });
     }
 
-    return this.channel;
+    return channel;
+  }
+
+  async assertQueue(queueName: string, options: Record<string, unknown> = { durable: true }): Promise<void> {
+    const channel = await this.getConnectionChannel();
+
+    if (!this.assertedQueues.has(queueName)) {
+      await channel.assertQueue(queueName, options);
+      this.assertedQueues.add(queueName);
+    }
+  }
+
+  async assertExchange(exchangeName: string, type: string, options: Record<string, unknown> = { durable: true }): Promise<void> {
+    const channel = await this.getConnectionChannel();
+
+    if (!this.assertedExchanges.has(exchangeName)) {
+      await channel.assertExchange(exchangeName, type, options);
+      this.assertedExchanges.add(exchangeName);
+    }
+  }
+
+  async bindQueue(queueName: string, exchangeName: string, routingKey: string): Promise<void> {
+    const channel = await this.getConnectionChannel();
+    await channel.bindQueue(queueName, exchangeName, routingKey);
   }
 
   async publish<T>(queueName: string, payloadData: T): Promise<void> {

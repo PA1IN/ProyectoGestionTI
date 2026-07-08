@@ -85,6 +85,5 @@ export type TransactionWebhookPayload = {
   paymentMethodToken?: string | null;
   customer?: string;
   card?: WebhookCardSummary | null;
-  reason?: string;
   timestamp: string;
 };

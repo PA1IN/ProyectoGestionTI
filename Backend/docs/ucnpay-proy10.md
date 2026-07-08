@@ -252,38 +252,9 @@ POST `https://tu-comercio/endpoint`
     "expMonth": 12,
     "expYear": 2028
   },
-  "reason": "Fondos insuficientes",
   "timestamp": "2026-06-24T18:00:00.000Z"
 }
 ```
-
----
-
-## Transacción rechazada (Mandato inexistente)
-
-```json
-{
-  "event": "transaction.rejected",
-  "transactionId": "trx_789",
-  "idOrden": "SUB-002",
-  "operationType": "MIT",
-  "status": "RECHAZADO",
-  "monto": 9900,
-  "moneda": "CLP",
-  "mandateId": null,
-  "paymentMethodToken": "pm_xxxxxxxxx",
-  "customer": "Juan Pérez",
-  "card": {
-    "brand": "VISA",
-    "last4": "4242",
-    "expMonth": 12,
-    "expYear": 2028
-  },
-  "reason": "No existe un mandato activo para este comercio",
-  "timestamp": "2026-06-24T18:00:00.000Z"
-}
-```
-
 
 ## Notas de integracion
 - Una misma tarjeta puede estar guardada por distintos usuarios, pero no se puede repetir la misma tarjeta activa para el mismo usuario.

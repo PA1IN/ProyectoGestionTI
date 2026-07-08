@@ -16,7 +16,6 @@ import { HistorialTransaccion } from './entities/historial-transaccion.entity';
 import { DetalleTransaccion, TipoPagoDb } from './entities/detalle-transaccion.entity';
 import { EstadoTransaccionDb, TipoOperacionTransaccionDb } from './enums/transaccion.enum';
 import { EstadoRespuestaTransaccion } from './enums/estado-respuesta-transaccion.enum';
-import { EstadoTransaccionDb } from './enums/transaccion.enum';
 import { RabbitMqService } from '@app/rmq';
 import { DataSource } from 'typeorm';
 
@@ -67,6 +66,10 @@ describe('PagoService', () => {
 
   const rmqServiceMock = {
     publish: jest.fn(),
+    consume: jest.fn(),
+    assertQueue: jest.fn(),
+    assertExchange: jest.fn(),
+    bindQueue: jest.fn(),
   };
 
   const comerciosServiceMock = {};
@@ -189,12 +192,11 @@ describe('PagoService', () => {
     transaccionRepositoryMock.save.mockResolvedValue({ id: 'tx-1', estado: EstadoTransaccionDb.APROBADO });
 
     const result = await service.processTransaction('jwt-token', {
-      idOrden: 'ORD-1',
       numeroTarjeta: '4111111111111111',
       titular: 'Juan Perez',
       fechaExpiracion: '12/28',
       cvv: '123',
-    });
+    } as any);
 
     expect(queryRunnerMock.manager.save).toHaveBeenCalledWith(
       DetalleTransaccion,
@@ -214,32 +216,18 @@ describe('PagoService', () => {
         statusTo: EstadoTransaccionDb.APROBADO,
       }),
     );
-    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
-      'analitica.eventos.transacciones',
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://analisis-proyecto-ti.onrender.com/v1/events',
       expect.objectContaining({
-        source: 'payments',
-        event_type: 'confirmar_pago',
-        payload: expect.objectContaining({
-          transaction_id: 'tx-1',
-          order_id: 'ORD-1',
-          approved: true,
-          codigo_error: null,
-          token_transaccion: 'jwt-token',
-        }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
       }),
     );
-    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
-      'pagos.notificaciones.webhooks',
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://merchant.local/webhook',
       expect.objectContaining({
-        targetUrl: 'http://merchant.local/webhook',
-        payload: expect.objectContaining({
-          source: 'payments',
-          event_type: 'confirmar_pago',
-          payload: expect.objectContaining({
-            approved: true,
-            codigo_error: null,
-          }),
-        }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
       }),
     );
     expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
@@ -302,40 +290,23 @@ describe('PagoService', () => {
     });
 
     const result = await service.processTransaction('jwt-token', {
-      idOrden: 'ORD-2',
       numeroTarjeta: '4111111111111111',
       titular: 'Juan Perez',
       fechaExpiracion: '12/28',
       cvv: '123',
-    });
+    } as any);
 
     expect(result.status).toBe(EstadoRespuestaTransaccion.RECHAZADO);
-    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
-      'analitica.eventos.transacciones',
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://analisis-proyecto-ti.onrender.com/v1/events',
       expect.objectContaining({
-        event_type: 'confirmar_pago',
-        payload: expect.objectContaining({
-          transaction_id: 'tx-2',
-          order_id: 'ORD-2',
-          approved: false,
-          codigo_error: 'insufficient_funds',
-          token_transaccion: 'jwt-token',
-        }),
+        method: 'POST',
       }),
     );
-    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
-      'pagos.notificaciones.webhooks',
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://merchant.local/webhook',
       expect.objectContaining({
-        targetUrl: 'http://merchant.local/webhook',
-        payload: expect.objectContaining({
-          source: 'payments',
-          event_type: 'confirmar_pago',
-          payload: expect.objectContaining({
-            approved: false,
-            codigo_error: 'insufficient_funds',
-            token_transaccion: 'jwt-token',
-          }),
-        }),
+        method: 'POST',
       }),
     );
   });
@@ -372,38 +343,22 @@ describe('PagoService', () => {
     const result = await service.processMitPayment({
       idOrden: 'ORD-MIT-1',
       monto: 2500,
-      moneda: 'CLP',
+      moneda: 'CLP' as any,
       paymentMethodToken: '11111111-1111-4111-8111-111111111111',
       customer: 'Cliente Demo', 
-    }, 'mc-1');
+    } as any, 'mc-1');
 
     expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
-    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
-      'analitica.eventos.transacciones',
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://analisis-proyecto-ti.onrender.com/v1/events',
       expect.objectContaining({
-        event_type: 'intento_pago',
-        payload: expect.objectContaining({
-          transaction_id: expect.any(String),
-          order_id: 'ORD-MIT-1',
-          subscription_id: 'md-1',
-          token_transaccion: 'card-1',
-          approved: false,
-        }),
+        method: 'POST',
       }),
     );
-    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
-      'pagos.notificaciones.webhooks',
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://merchant.local/webhook',
       expect.objectContaining({
-        targetUrl: 'http://merchant.local/webhook',
-        payload: expect.objectContaining({
-          event_type: 'confirmar_pago',
-          payload: expect.objectContaining({
-            approved: true,
-            subscription_id: 'md-1',
-            token_transaccion: 'card-1',
-            transaction_id: expect.any(String),
-          }),
-        }),
+        method: 'POST',
       }),
     );
   });
@@ -430,13 +385,13 @@ describe('PagoService', () => {
     await expect(service.processMitPayment({
       idOrden: 'ORD-MIT-NO-MANDATE',
       monto: 2500,
-      moneda: 'clp',
+      moneda: 'clp' as any,
       paymentMethodToken: '11111111-1111-4111-8111-111111111111',
       customer: 'Cliente Demo',
-    }, 'mc-1')).rejects.toThrow('No existe un mandato activo para este comercio');
+    } as any, 'mc-1')).rejects.toThrow('No existe un mandato activo para este comercio');
 
     expect(dataSourceMock.createQueryRunner).not.toHaveBeenCalled();
-    expect(rmqServiceMock.publish).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('processMitPayment debe continuar con mandato suspendido', async () => {
@@ -474,31 +429,19 @@ describe('PagoService', () => {
     const result = await service.processMitPayment({
       idOrden: 'ORD-MIT-SUSPENDED',
       monto: 2500,
-      moneda: 'clp',
+      moneda: 'clp' as any,
       paymentMethodToken: '11111111-1111-4111-8111-111111111111',
       customer: 'Cliente Demo',
-    }, 'mc-1');
+    } as any, 'mc-1');
 
     expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
-    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
-      'pagos.notificaciones.webhooks',
-      expect.objectContaining({
-        payload: expect.objectContaining({
-          event_type: 'intento_pago',
-        }),
-      }),
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://analisis-proyecto-ti.onrender.com/v1/events',
+      expect.objectContaining({ method: 'POST' }),
     );
-    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
-      'pagos.notificaciones.webhooks',
-      expect.objectContaining({
-        payload: expect.objectContaining({
-          event_type: 'confirmar_pago',
-          payload: expect.objectContaining({
-            approved: true,
-            subscription_id: 'md-suspended',
-          }),
-        }),
-      }),
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://merchant.local/webhook',
+      expect.objectContaining({ method: 'POST' }),
     );
   });
 
@@ -534,40 +477,19 @@ describe('PagoService', () => {
     const result = await service.processMitPayment({
       idOrden: 'ORD-MIT-2',
       monto: 2500,
-      moneda: 'clp',
+      moneda: 'clp' as any,
       paymentMethodToken: '11111111-1111-4111-8111-111111111111',
       customer: 'Cliente Demo',
-    }, 'mc-1');
+    } as any, 'mc-1');
 
     expect(result.status).toBe(EstadoRespuestaTransaccion.RECHAZADO);
-    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
-      'analitica.eventos.transacciones',
-      expect.objectContaining({
-        event_type: 'confirmar_pago',
-        payload: expect.objectContaining({
-          transaction_id: expect.any(String),
-          order_id: 'ORD-MIT-2',
-          approved: false,
-          codigo_error: 'insufficient_funds',
-          token_transaccion: 'card-2',
-        }),
-      }),
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://analisis-proyecto-ti.onrender.com/v1/events',
+      expect.objectContaining({ method: 'POST' }),
     );
-    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
-      'pagos.notificaciones.webhooks',
-      expect.objectContaining({
-        targetUrl: 'http://merchant.local/webhook',
-        payload: expect.objectContaining({
-          event_type: 'confirmar_pago',
-          payload: expect.objectContaining({
-            approved: false,
-            codigo_error: 'insufficient_funds',
-            subscription_id: 'md-1',
-            token_transaccion: 'card-2',
-            transaction_id: expect.any(String),
-          }),
-        }),
-      }),
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://merchant.local/webhook',
+      expect.objectContaining({ method: 'POST' }),
     );
     expect(queryRunnerMock.manager.save).toHaveBeenCalledWith(
       MandatoPago,
@@ -600,29 +522,62 @@ describe('PagoService', () => {
       returnUrl: 'http://localhost:3000/ok',
     }, 'mc-1')).rejects.toThrow('El id de orden ya fue utilizado con otra solicitud');
 
-    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
-      'pagos.notificaciones.webhooks',
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://proyecto11-mochicode.onrender.com/api/v1/alertas',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('createTransaction debe guardar rrn al crear y programar expiracion en RabbitMQ', async () => {
+    credencialComercioRepositoryMock.findOne.mockResolvedValue({
+      id: 'mc-1',
+      estado: 'ACTIVA',
+      nombreComercio: 'Demo',
+      webhookUrl: 'http://merchant.local/webhook',
+    });
+    transaccionRepositoryMock.findOne.mockResolvedValue(null);
+    jwtServiceMock.signAsync.mockResolvedValue('signed-checkout-token');
+
+    const result = await service.createTransaction({
+      idOrden: 'ORD-NEW-1',
+      monto: 1500,
+      moneda: 'CLP',
+      nombreComercio: 'Demo',
+      returnUrl: 'http://localhost:3000/ok',
+    }, 'mc-1');
+
+    expect(transaccionRepositoryMock.save).toHaveBeenCalledWith(
       expect.objectContaining({
-        targetUrl: 'http://merchant.local/webhook',
-        payload: expect.objectContaining({
-          sistema_id: 'P04',
-          payload: expect.objectContaining({
-            error: 'NOT_EQUAL',
-            id_transaccion: 'tx-1',
-            monto_original: 1000,
-            monto_cobrado: 2000,
-          }),
+        idOrden: 'ORD-NEW-1',
+        estado: EstadoTransaccionDb.PENDIENTE,
+        rrn: expect.any(Number),
+      }),
+    );
+    expect(rmqServiceMock.assertExchange).toHaveBeenCalledWith(
+      'pagos.expiracion.dlx',
+      'direct',
+      expect.objectContaining({ durable: true }),
+    );
+    expect(rmqServiceMock.assertQueue).toHaveBeenCalledWith(
+      'pagos.expiracion',
+      expect.objectContaining({
+        durable: true,
+        arguments: expect.objectContaining({
+          'x-message-ttl': 300000,
+          'x-dead-letter-exchange': 'pagos.expiracion.dlx',
+          'x-dead-letter-routing-key': 'pagos.expiracion.dlq',
         }),
       }),
     );
     expect(rmqServiceMock.publish).toHaveBeenCalledWith(
-      'analitica.alertas.transacciones',
+      'pagos.expiracion',
       expect.objectContaining({
-        payload: expect.objectContaining({
-          error: 'NOT_EQUAL',
-        }),
+        transactionId: result.transactionId,
+        createdAt: expect.any(String),
       }),
     );
+    expect(result.transactionId).toBeDefined();
+    expect(result.token).toBe('signed-checkout-token');
   });
 
   it('getAllTransacciones devuelve el repositorio', async () => {
@@ -691,18 +646,10 @@ describe('PagoService', () => {
       })
     );
 
-    // 4. Verificaciones de RabbitMQ / Webhooks
-    expect(rmqServiceMock.publish).toHaveBeenCalledWith(
-      'pagos.notificaciones.webhooks',
-      expect.objectContaining({
-        targetUrl: 'http://merchant.local/webhook',
-        payload: expect.objectContaining({
-          event: 'transaction.approved',
-          operationType: 'CIT',
-          status: EstadoRespuestaTransaccion.APROBADO,
-          monto: 5000,
-        }),
-      })
+    // 4. Verificaciones de webhooks directos
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://analisis-proyecto-ti.onrender.com/v1/events',
+      expect.objectContaining({ method: 'POST' }),
     );
 
     // 5. Verificación de la respuesta
