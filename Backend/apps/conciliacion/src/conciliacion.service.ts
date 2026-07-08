@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
@@ -97,6 +97,17 @@ export class ConciliacionService {
   ): Promise<DiscrepanciaResumen[]> {
     const fechaHoraStr = fechaHora.toISOString();
 
+    const validation = await this.dataSource.query(
+      `SELECT 1 FROM discrepancias_conciliacion WHERE archivo_id = $1 LIMIT 1`,
+      [archivoId],
+    );
+
+    if (validation.length > 0) {
+      throw new ConflictException(
+        `El archivo con ID "${archivoId}" ya fue conciliado previamente.`,
+      );
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -133,6 +144,10 @@ export class ConciliacionService {
           RETURNING id, rrn, id_transaccion, tipo, estado, monto_interno, monto_banco, archivo_id;
         `,
         [fechaHoraStr, archivoId],
+      );
+
+      await queryRunner.manager.query(
+        `TRUNCATE TABLE conciliacion_temporal RESTART IDENTITY CASCADE;`
       );
 
       await queryRunner.commitTransaction();
