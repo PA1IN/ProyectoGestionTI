@@ -7,6 +7,7 @@ export interface DetalleTransaccion {
     montoTotal: number;
     moneda: string;
     estado: 'APROBADO' | 'RECHAZADO' | 'PENDIENTE';
+    returnUrl?: string;
     tarjeta: {
         marca: string | null;
         ultimosCuatro: string | null;
@@ -25,6 +26,18 @@ export interface DatosPagoTarjeta {
     titular?: string;
 }
 
+export interface ComprobantePago {
+    montoTotal: number;
+    moneda: string;
+    nombreComercio: string;
+    fechaHora: string;
+    numeroOrden:string;
+    estado:string;
+    codigoAutorizacion:string;
+    metodoPago:string;
+    ultimosCuatro:string;
+}
+
 // obtiene los datos cuando el usuario accede a checkout
 /*export function useDetalleTransaccion(token: string) {
     return useQuery<DetalleTransaccion>({
@@ -37,6 +50,18 @@ export interface DatosPagoTarjeta {
         retry: false, // en caso de error no reintentar la peticion
     })
 }*/
+
+export function useObtenerComprobante(transactionId:string | null) {
+    return useQuery<ComprobantePago>({
+        queryKey:['comprobante', transactionId],
+        queryFn: async () => {
+            const respuesta = await api.get(`/ucnpay/comprobante/${transactionId}`);
+            return respuesta.data as ComprobantePago;
+        },
+        enabled:!!transactionId,
+        retry:false
+    });
+}
 
 export function useDetalleTransaccion(token: string) {
     return useQuery<DetalleTransaccion>({

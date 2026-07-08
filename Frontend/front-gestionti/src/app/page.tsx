@@ -4,9 +4,11 @@ import React, { useState } from 'react';
 import { ArrowRight, CreditCard, Lock, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import api from '@/api/axios';
+import { useRouter } from 'next/dist/client/components/navigation';
 
 export default function Home() {
   const [generandoCheckout, setGenerandoCheckout] = useState(false);
+  const router = useRouter();
 
   const crearPagoDemo = async () => {
     setGenerandoCheckout(true);
@@ -17,15 +19,17 @@ export default function Home() {
         monto: 16000,
         moneda: 'CLP',
         nombreComercio: 'Proyecto Gestión TI',
-        returnUrl: 'https://youtu.be/dQw4w9WgXcQ',
+        returnUrl: `${window.location.origin}/`,
       });
 
-      window.location.href = respuesta.data.transactionUrl;
+      //window.location.href = respuesta.data.transactionUrl;
+      router.push(respuesta.data.transactionUrl);
+      setGenerandoCheckout(false);
     } catch (error) {
       window.alert(error);
       console.error('No se pudo crear la transaccion de checkout:', error);
       setGenerandoCheckout(false);
-      window.location.href = '/login';
+      router.push('/');
     }
   };
 
