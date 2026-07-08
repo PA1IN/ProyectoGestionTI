@@ -209,6 +209,25 @@ export class GatewayController {
     );
   }
 
+  @Get('ucnpay/transaction/:id')
+  @Public()
+  async getTransactionInfo(
+    @Param('id') id: string,
+    @Headers() headers: IncomingHttpHeaders,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.relay(
+      response,
+      this.gatewayService.forwardJsonRequest(
+        this.gatewayService.pagosBaseUrl,
+        `/ucnpay/transaction/${id}`,
+        'GET',
+        undefined,
+        headers,
+      ),
+    );
+  }
+
   @Post('ucnpay/checkout/:token/process/qr')
   @Public()
   async processCheckoutQr(

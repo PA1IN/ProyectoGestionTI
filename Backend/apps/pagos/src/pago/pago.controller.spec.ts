@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PagoController } from './pago.controller';
 import { PagoService } from './pago.service';
 import { EstadoRespuestaTransaccion } from './enums/estado-respuesta-transaccion.enum';
+import { ComerciosService } from '../comercios/comercios.service';
 
 describe('PagoController', () => {
   let controller: PagoController;
@@ -16,12 +17,21 @@ describe('PagoController', () => {
     getAllHistoriales: jest.fn(),
     getDetalleTransaccion: jest.fn(),
     getHistorialTransaccion: jest.fn(),
+    getTransactionInfo: jest.fn(),
   };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PagoController],
-      providers: [{ provide: PagoService, useValue: pagoServiceMock }],
+      providers: [
+        { provide: PagoService, useValue: pagoServiceMock },
+        {
+          provide: ComerciosService,
+          useValue: {
+            validarCredenciales: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
     controller = module.get<PagoController>(PagoController);
@@ -63,50 +73,19 @@ describe('PagoController', () => {
     expect(pagoServiceMock.processTransaction).toHaveBeenCalledWith('token', payload);
   });
 
-  //mover este spec a medios-pago, ahi se tokeniza
-  it('debe llamar al servicio al tokenizar una tarjeta mit', async () => {
-    const payload = {
-      idOrden: 'ORD-3',
-      card: {
-        number: '4111111111111111',
-        exp_month: '12',
-        exp_year: '2028',
-        cvc: '123',
-      },
-      titular: 'Juan Perez',
-    };
-    pagoServiceMock.tokenizeMitCard.mockResolvedValue({
-      status: EstadoRespuestaTransaccion.APROBADO,
-      message: 'Tarjeta tokenizada correctamente',
-      paymentMethodToken: 'pm-1',
-      mandateId: 'md-1',
-      card: {
-        paymentMethodToken: 'pm-1',
-        brand: 'VISA',
-        last4: '1111',
-        expMonth: 12,
-        expYear: 2028,
-        holderName: 'Juan Perez',
-      },
-    });
-
-    await expect(controller.tokenizeMit({ merchantCredential: { id: 'mc-1' } } as never, payload as never)).resolves.toMatchObject({
-      status: EstadoRespuestaTransaccion.APROBADO,
-    });
-    expect(pagoServiceMock.tokenizeMitCard).toHaveBeenCalledWith(payload, 'mc-1');
-  });
-
   it('debe exponer los getters simples del modulo', async () => {
     pagoServiceMock.getAllTransacciones.mockResolvedValue([]);
     pagoServiceMock.getAllDetalles.mockResolvedValue([]);
     pagoServiceMock.getAllHistoriales.mockResolvedValue([]);
     pagoServiceMock.getDetalleTransaccion.mockResolvedValue(null);
     pagoServiceMock.getHistorialTransaccion.mockResolvedValue(null);
+    pagoServiceMock.getTransactionInfo.mockResolvedValue(null);
 
     await expect(controller.getAllTransacciones()).resolves.toEqual([]);
     await expect(controller.getAllDetalles()).resolves.toEqual([]);
     await expect(controller.getAllHistoriales()).resolves.toEqual([]);
     await expect(controller.getDetalleTransaccion('1')).resolves.toBeNull();
     await expect(controller.getHistorialTransaccion('uuid-1')).resolves.toBeNull();
+    await expect(controller.getTransactionInfo({ merchantCredential: { id: 'mc-1' } } as never, 'tx-1')).resolves.toBeNull();
   });
 });

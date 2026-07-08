@@ -32,6 +32,12 @@ export class PagoController {
     return this.pagoService.generateCheckoutQr(token);
   }
 
+  @Get('transaction/:id')
+  @UseGuards(PagoMerchantAuthGuard)
+  getTransactionInfo(@Req() request: any, @Param('id') id: string) {
+    return this.pagoService.getTransactionInfo(id, request.merchantCredential.id);
+  }
+
   @Post('checkout/:token/process')
   async processCheckout(@Param('token') token: string, @Body() checkoutDto: CheckoutDto) {
     return this.pagoService.processTransaction(token, checkoutDto);

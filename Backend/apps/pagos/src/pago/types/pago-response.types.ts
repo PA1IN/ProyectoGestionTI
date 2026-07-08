@@ -1,4 +1,6 @@
 import { EstadoRespuestaTransaccion } from '../enums/estado-respuesta-transaccion.enum';
+import { TipoPagoDb } from '../entities/detalle-transaccion.entity';
+import { TipoOperacionTransaccionDb } from '../enums/transaccion.enum';
 
 export type PaymentCardSummary = {
   paymentMethodToken: string;
@@ -15,6 +17,25 @@ export type TransactionDetails = {
   monto: number;
   moneda: string;
   nombreComercio: string;
+};
+
+export type TransactionPaymentInfo = {
+  status: EstadoRespuestaTransaccion;
+  paymentType: TipoPagoDb | null;
+  amount: number;
+  currency: string;
+  operationType: TipoOperacionTransaccionDb | null;
+  rrn: number | null;
+  authorizationCode: string | null;
+  cardIssuer: string | null;
+  last4Digits: string | null;
+  installments: number | null;
+};
+
+export type TransactionInfoResult = {
+  transactionId: string;
+  orderId: string;
+  paymentInfo: TransactionPaymentInfo;
 };
 
 export type TransactionResponseBase = {

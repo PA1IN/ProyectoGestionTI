@@ -217,7 +217,7 @@ describe('PagoService', () => {
       }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://analisis-proyecto-ti.onrender.com/v1/events',
+      'http://localhost:8000/log',
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -298,7 +298,7 @@ describe('PagoService', () => {
 
     expect(result.status).toBe(EstadoRespuestaTransaccion.RECHAZADO);
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://analisis-proyecto-ti.onrender.com/v1/events',
+      'http://localhost:8000/log',
       expect.objectContaining({
         method: 'POST',
       }),
@@ -350,7 +350,7 @@ describe('PagoService', () => {
 
     expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://analisis-proyecto-ti.onrender.com/v1/events',
+      'http://localhost:8000/log',
       expect.objectContaining({
         method: 'POST',
       }),
@@ -436,7 +436,7 @@ describe('PagoService', () => {
 
     expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://analisis-proyecto-ti.onrender.com/v1/events',
+      'http://localhost:8000/log',
       expect.objectContaining({ method: 'POST' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
@@ -484,7 +484,7 @@ describe('PagoService', () => {
 
     expect(result.status).toBe(EstadoRespuestaTransaccion.RECHAZADO);
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://analisis-proyecto-ti.onrender.com/v1/events',
+      'http://localhost:8000/log',
       expect.objectContaining({ method: 'POST' }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
@@ -523,7 +523,7 @@ describe('PagoService', () => {
     }, 'mc-1')).rejects.toThrow('El id de orden ya fue utilizado con otra solicitud');
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://proyecto11-mochicode.onrender.com/api/v1/alertas',
+      'http://localhost:8000/log',
       expect.objectContaining({ method: 'POST' }),
     );
   });
@@ -591,6 +591,51 @@ describe('PagoService', () => {
 
     await expect(service.getDetalleTransaccion(1)).resolves.toBeNull();
   });
+
+  it('getTransactionInfo devuelve el resumen de la transaccion validando el comercio', async () => {
+    transaccionRepositoryMock.findOne.mockResolvedValue({
+      id: 'tx-1',
+      idOrden: 'ORD-1',
+      merchantCredentialId: 'mc-1',
+      monto: '15500.00',
+      moneda: 'CLP',
+      estado: EstadoTransaccionDb.APROBADO,
+      rrn: 541289,
+      tipoOperacion: TipoOperacionTransaccionDb.MIT,
+      detalles: [
+        {
+          tipoPago: TipoPagoDb.TARJETA,
+          codigoAutorizacion: 'A93BF2',
+          emisorTarjeta: 'VISA',
+          ultimosCuatro: '4592',
+          cuotas: 1,
+        },
+      ],
+    });
+    credencialComercioRepositoryMock.findOne.mockResolvedValue({
+      id: 'mc-1',
+      estado: EstadoCredencialComercioDb.ACTIVA,
+      nombreComercio: 'Demo',
+      webhookUrl: 'http://merchant.local/webhook',
+    });
+
+    await expect(service.getTransactionInfo('tx-1', 'mc-1')).resolves.toEqual({
+      transactionId: 'tx-1',
+      orderId: 'ORD-1',
+      paymentInfo: {
+        status: EstadoRespuestaTransaccion.APROBADO,
+        paymentType: TipoPagoDb.TARJETA,
+        amount: 15500,
+        currency: 'CLP',
+        operationType: TipoOperacionTransaccionDb.MIT,
+        rrn: 541289,
+        authorizationCode: 'A93BF2',
+        cardIssuer: 'VISA',
+        last4Digits: '4592',
+        installments: 1,
+      },
+    });
+  });
   it('processQrTransaction debe aprobar simulación, guardar detalle QR e historial', async () => {
     // 1. Setup
     jwtServiceMock.verifyAsync.mockResolvedValue({
@@ -648,7 +693,7 @@ describe('PagoService', () => {
 
     // 4. Verificaciones de webhooks directos
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://analisis-proyecto-ti.onrender.com/v1/events',
+      'http://localhost:8000/log',
       expect.objectContaining({ method: 'POST' }),
     );
 

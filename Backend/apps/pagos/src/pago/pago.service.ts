@@ -18,7 +18,7 @@ import { TarjetaService } from '../tarjeta/tarjeta.service';
 import { EstadoMandatoPagoDb, MandatoPago } from '../medios-pago/entities/mandato-pago.entity';
 import { EstadoTarjetaGuardadaDb } from '../medios-pago/entities/tarjeta-guardada.entity';
 import { CredencialComercio, EstadoCredencialComercioDb } from '../comercios/entities/credencial-comercio.entity';
-import { CheckoutDetail, CheckoutQrResult, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult, TransactionWebhookPayload } from './types/pago-response.types';
+import { CheckoutDetail, CheckoutQrResult, CreateTransactionResult, MitPaymentResult, ProcessTransactionResult, TransactionInfoResult, TransactionWebhookPayload } from './types/pago-response.types';
 import { CheckoutPayload, TransactionPayload } from './types/pago-jwt-payload.types';
 import { BancoEstadoOperacion } from '../tarjeta/types/banco.types';
 import {
@@ -517,6 +517,42 @@ export class PagoService implements OnModuleInit {
     }
   }
 
+  async getTransactionInfo(transactionId: string, merchantCredentialId?: string): Promise<TransactionInfoResult> {
+    const merchantCredential = await this.resolveMerchantCredential(merchantCredentialId);
+
+    const transaccion = await this.transaccionRepository.findOne({
+      where: { id: transactionId },
+      relations: ['detalles'],
+    });
+
+    if (!transaccion) {
+      throw new NotFoundException('Transacción no encontrada');
+    }
+
+    if (transaccion.merchantCredentialId && transaccion.merchantCredentialId !== merchantCredential.id) {
+      throw new UnauthorizedException('La transacción no pertenece al comercio autenticado');
+    }
+
+    const detalle = transaccion.detalles?.[0] ?? null;
+
+    return {
+      transactionId: transaccion.id,
+      orderId: transaccion.idOrden,
+      paymentInfo: {
+        status: this.mapEstadoRespuestaTransaccion(transaccion.estado),
+        paymentType: detalle?.tipoPago ?? null,
+        amount: Number(transaccion.monto),
+        currency: transaccion.moneda,
+        operationType: transaccion.tipoOperacion ?? null,
+        rrn: transaccion.rrn ?? null,
+        authorizationCode: detalle?.codigoAutorizacion ?? null,
+        cardIssuer: detalle?.emisorTarjeta ?? null,
+        last4Digits: detalle?.ultimosCuatro ?? null,
+        installments: detalle?.cuotas ?? null,
+      },
+    };
+  }
+
   async generateCheckoutQr(token: string): Promise<CheckoutQrResult> {
     try {
       const payload = await this.jwtService.verifyAsync<CheckoutPayload>(token, {
@@ -996,6 +1032,18 @@ export class PagoService implements OnModuleInit {
     }
 
     return 'rejected';
+  }
+
+  private mapEstadoRespuestaTransaccion(estado: EstadoTransaccionDb): EstadoRespuestaTransaccion {
+    if (estado === EstadoTransaccionDb.APROBADO) {
+      return EstadoRespuestaTransaccion.APROBADO;
+    }
+
+    if (estado === EstadoTransaccionDb.RECHAZADO || estado === EstadoTransaccionDb.FALLIDO) {
+      return EstadoRespuestaTransaccion.RECHAZADO;
+    }
+
+    return EstadoRespuestaTransaccion.PENDIENTE;
   }
 
   private async publicarAlertaMontoManipulado(params: {
