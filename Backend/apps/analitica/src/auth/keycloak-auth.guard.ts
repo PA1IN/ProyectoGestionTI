@@ -56,8 +56,8 @@ export class KeycloakAuthGuard implements CanActivate {
   }
 
   private buildIssuer() {
-    const baseUrl = this.configService.get<string>('KEYCLOAK_URL') || 'http://localhost';
-    const realm = this.configService.get<string>('KEYCLOAK_REALM') || 'sistema-centralizado';
+    const baseUrl = this.configService.get<string>('KEYCLOAK_URL');
+    const realm = this.configService.get<string>('KEYCLOAK_REALM');
 
     return `${baseUrl}/realms/${realm}`;
   }

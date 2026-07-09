@@ -32,7 +32,7 @@ import { RmqModule } from '@app/rmq';
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         url: configService.get<string>('DATABASE_URL'),
-        synchronize: true,
+        synchronize: process.env.NODE_ENV !== 'production',
         autoLoadEntities: true,
       }),
     }),
@@ -40,13 +40,13 @@ import { RmqModule } from '@app/rmq';
       imports: [NestConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const expiresInRaw = configService.get<string>('JWT_EXPIRES_IN') || '15m';
-        const expiresIn = /^\d+$/.test(expiresInRaw)
+        const expiresInRaw = configService.get<string>('JWT_EXPIRES_IN');
+        const expiresIn = /^\d+$/.test(expiresInRaw!)
           ? Number(expiresInRaw)
           : (expiresInRaw as StringValue);
 
         return {
-          secret: configService.get<string>('JWT_SECRET') || 'R4nd0mS3cr3tK3yF0rJWT',
+          secret: configService.get<string>('JWT_SECRET'),
           signOptions: {
             expiresIn,
           },

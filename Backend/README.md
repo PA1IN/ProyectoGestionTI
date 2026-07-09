@@ -1,17 +1,18 @@
+## Configuración necesario para levantar el proyecto localmente
+
+### Requisitos
+
+Tener instalado Docker Desktop. (Al instalar docker desktop se instala los comandos de la shell/terminal)
 
 
+### Instrucciones
 
-## Setup del proyecto
+En la carpeta raíz del proyecto, se tiene que poner el siguiente comando para iniciar y crear el contenedor de docker.
 
 ```bash
-$ npm install
+$ docker-compose up -d --build
 ```
 
-## Levantar la base de datos con docker primero en la raiz del proyecto
-
-```bash
-$ docker-compose up -d --build db
-```
 
 ## Para compilar el proyecto por microservicio (sin docker)
 
