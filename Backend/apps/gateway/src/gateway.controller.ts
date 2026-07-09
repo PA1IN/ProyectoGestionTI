@@ -269,6 +269,23 @@ export class GatewayController {
     );
   }
 
+    @Post('conciliacion/discrepancias/exportar-csv')
+    @Public()
+    async exportarCsvDiscrepancias(
+      @Body() body: { simulation: string | boolean; prob?: number },
+      @Res({ passthrough: true }) response: Response,
+    ) {
+      return this.relay(
+        response,
+        this.gatewayService.forwardJsonRequest(
+          this.gatewayService.conciliacionBaseUrl,
+          '/conciliacion/discrepancias/exportar-csv',
+          'POST',
+          body,
+        ),
+      );
+    }
+
   @Post('ucnpay/init/suscription')
   @Public()
   async tokenizeMit(
