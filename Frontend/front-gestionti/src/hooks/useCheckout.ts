@@ -126,7 +126,7 @@ export function useProcesarPagoQr(tokenTransaccion: string) {
     return useMutation({
         mutationFn: async (tokenQr: string) => {
             const respuesta = await api.post(
-                `/ucnpay/checkout/${tokenTransaccion}/process-qr`,
+                `/ucnpay/checkout/${tokenTransaccion}/process/qr`,
                 { qrData:tokenQr }
             );
             return respuesta.data;
