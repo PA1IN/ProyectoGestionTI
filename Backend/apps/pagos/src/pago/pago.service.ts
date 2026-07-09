@@ -1149,16 +1149,31 @@ export class PagoService implements OnModuleInit {
       createdAt: entry.createdAt,
     }));
   }
-  async getAllTransacciones() {
-    const transacciones = await this.transaccionRepository.find({ relations: ['detalles', 'historial'] });
+  async getAllTransacciones(pagination: { page: number; limit: number } = { page: 1, limit: 20 }) {
+    const transacciones = await this.transaccionRepository.find({
+      relations: ['detalles', 'historial'],
+      order: { createdAt: 'DESC' },
+      take: pagination.limit,
+      skip: (pagination.page - 1) * pagination.limit,
+    });
     return transacciones;
   }
-  async getAllDetalles() {
-    const detalles = await this.detalleRepository.find({ relations: ['transaccion'] });
+  async getAllDetalles(pagination: { page: number; limit: number } = { page: 1, limit: 20 }) {
+    const detalles = await this.detalleRepository.find({
+      relations: ['transaccion'],
+      order: { id: 'DESC' },
+      take: pagination.limit,
+      skip: (pagination.page - 1) * pagination.limit,
+    });
     return detalles;
   }
-  async getAllHistoriales() {
-    const historiales = await this.historialRepository.find({ relations: ['transaccion'] });
+  async getAllHistoriales(pagination: { page: number; limit: number } = { page: 1, limit: 20 }) {
+    const historiales = await this.historialRepository.find({
+      relations: ['transaccion'],
+      order: { createdAt: 'DESC' },
+      take: pagination.limit,
+      skip: (pagination.page - 1) * pagination.limit,
+    });
     return historiales;
   }
 

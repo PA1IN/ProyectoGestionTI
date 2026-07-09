@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { PagoService } from './pago.service';
 import { CreateTransaccionDto } from './dto/create-transaccion.dto';
 import { PagoMerchantAuthGuard } from './guards/pago-merchant-auth.guard';
@@ -48,23 +48,23 @@ export class PagoController {
   }
 
   @Get()
-  findAll() {
-    return this.pagoService.getAllTransacciones();
+  findAll(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.pagoService.getAllTransacciones(this.parsePagination(page, limit));
   }
 
   @Get('transacciones')
-  getAllTransacciones() {
-    return this.pagoService.getAllTransacciones();
+  getAllTransacciones(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.pagoService.getAllTransacciones(this.parsePagination(page, limit));
   }
 
   @Get('detalles')
-  getAllDetalles() {
-    return this.pagoService.getAllDetalles();
+  getAllDetalles(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.pagoService.getAllDetalles(this.parsePagination(page, limit));
   }
 
   @Get('historiales')
-  getAllHistoriales() {
-    return this.pagoService.getAllHistoriales();
+  getAllHistoriales(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.pagoService.getAllHistoriales(this.parsePagination(page, limit));
   }
 
   @Get('detalle/:id')
@@ -79,5 +79,15 @@ export class PagoController {
   @Get('comprobante/:transactionId')
   async getComprobante(@Param('transactionId') transactionId: string) {
     return this.pagoService.getComprobante(transactionId);
+  }
+
+  private parsePagination(page?: string, limit?: string) {
+    const parsedPage = Number.parseInt(page ?? '1', 10);
+    const parsedLimit = Number.parseInt(limit ?? '20', 10);
+
+    return {
+      page: Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1,
+      limit: Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 20,
+    };
   }
 }

@@ -210,7 +210,6 @@ export class GatewayController {
   }
 
   @Get('ucnpay/transaction/:id')
-  @Public()
   async getTransactionInfo(
     @Param('id') id: string,
     @Headers() headers: IncomingHttpHeaders,
@@ -346,7 +345,6 @@ export class GatewayController {
   }
 
   @Post('ucnpay/suscription/authorize')
-  @Public()
   async authorizeSuscription(
     @Body() body: Record<string, unknown>,
     @Headers() headers: IncomingHttpHeaders,
@@ -365,7 +363,6 @@ export class GatewayController {
   }
 
   @Delete('ucnpay/tarjeta')
-  @Public()
   async eliminarTarjeta(
     @Body() body: Record<string, unknown>,
     @Headers() headers: IncomingHttpHeaders,

@@ -13,11 +13,15 @@ import { REQUIRE_ADMIN_KEY } from './admin.decorator';
 @Injectable()
 export class KeycloakAuthGuard implements CanActivate {
   private readonly keycloakClientId = 'p4';
+  private readonly jwks: ReturnType<typeof createRemoteJWKSet>;
 
   constructor(
     private readonly reflector: Reflector,
     private readonly configService: ConfigService,
-  ) {}
+  ) {
+    const issuer = this.configService.get<string>('KEYCLOAK_ISSUER') || this.buildIssuer();
+    this.jwks = createRemoteJWKSet(new URL(`${issuer}/protocol/openid-connect/certs`));
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
@@ -29,14 +33,13 @@ export class KeycloakAuthGuard implements CanActivate {
 
     const token = authorization.slice('Bearer '.length);
     const issuer = this.configService.get<string>('KEYCLOAK_ISSUER') || this.buildIssuer();
-    const jwks = createRemoteJWKSet(new URL(`${issuer}/protocol/openid-connect/certs`));
     const requireAdmin = this.reflector.getAllAndOverride<boolean>(REQUIRE_ADMIN_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
 
     try {
-      const { payload } = await jwtVerify(token, jwks, {
+      const { payload } = await jwtVerify(token, this.jwks, {
         issuer,
       });
 

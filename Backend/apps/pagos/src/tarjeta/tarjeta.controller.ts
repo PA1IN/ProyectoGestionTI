@@ -1,10 +1,12 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { TarjetaService } from './tarjeta.service';
 import { CreateTarjetaDto } from './dto/create-tarjeta.dto';
 import { AutorizarTarjetaBancoDto } from './dto/autorizar-tarjeta-banco.dto';
+import { PagoMerchantAuthGuard } from '../pago/guards/pago-merchant-auth.guard';
 
 
 @Controller('tarjeta')
+@UseGuards(PagoMerchantAuthGuard)
 export class TarjetaController {
   constructor(private readonly tarjetaService: TarjetaService) {}
 

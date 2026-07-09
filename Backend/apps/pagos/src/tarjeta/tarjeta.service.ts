@@ -74,7 +74,7 @@ export class TarjetaService {
       numero: dto.numero,
       titular: dto.titular,
       fechaExpiracion: dto.fechaExpiracion,
-      cvv: dto.cvv ?? '000',
+      cvv: dto.cvv,
       dinero: this.generarDineroAleatorio(),
       estado: null,
     });
