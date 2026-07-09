@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - master
+      - produccion
+      - Desarrollo
   pull_request:
 
 jobs:
