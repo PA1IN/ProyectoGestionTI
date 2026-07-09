@@ -34,16 +34,6 @@ export interface UploadPayload {
     archivoId?: string;
 }
 
-/*
-export interface RegistroHistorial {
-    id: string;
-    archivo_id: string;
-    fecha_hora: string;
-    registros_banco: number;
-    discrepancias_encontradas: number;
-    operador: string;
-}
-*/
 
 export interface DiscrepanciaHistorial {
     id:number;
@@ -77,52 +67,6 @@ export function useSubirArchivoConciliacion() {
         }
     });
 }
-/*
-export function useHistorialConciliaciones() {
-    return useQuery<RegistroHistorial[]>({
-        queryKey: ['historialConciliaciones'],
-        queryFn: async () => {
-            // backend real:
-            
-            const respuesta = await api.get('/conciliacion/historial'); 
-            return respuesta.data as RegistroHistorial[];
-            
-            
-            return new Promise((resolve) => {
-                setTimeout(() => {
-                    resolve([
-                        { 
-                            id: '101', 
-                            fecha_hora: '2026-05-11T14:30:00Z', 
-                            archivo_id: 'banco_estado_1105.csv', 
-                            registros_banco: 450, 
-                            discrepancias_encontradas: 2, 
-                            operador: 'henrique gomez' 
-                        },
-                        { 
-                            id: '102', 
-                            fecha_hora: '2026-05-10T11:15:00Z', 
-                            archivo_id: 'banco_estado_1005.csv', 
-                            registros_banco: 380, 
-                            discrepancias_encontradas: 0, 
-                            operador: 'daniel soto' 
-                        },
-                        { 
-                            id: '103', 
-                            fecha_hora: '2026-05-09T09:00:00Z', 
-                            archivo_id: 'banco_estado_0905.csv', 
-                            registros_banco: 412, 
-                            discrepancias_encontradas: 5, 
-                            operador: 'juanito perez' 
-                        },
-                    ]);
-                }, 1000);
-            });
-        }
-    });
-}
-*/
-
 
 export function useHistorialConciliaciones(){
     return useQuery<DiscrepanciaHistorial[]>({
@@ -140,7 +84,6 @@ export interface CerrarDiscrepanciaPayload {
     resuelto_por?: string;
 }
 
-const USUARIO_SISTEMA_UUID = '00000000-0000-0000-0000-000000000000';
 
 export function useDiscrepanciaPorRrn(rrn: number | null) {
     return useQuery<DetalleDiscrepancia>({
@@ -163,8 +106,6 @@ export function useCerrarDiscrepancia() {
             const respuesta = await api.patch(
                 `/conciliacion/discrepancias/${rrn}`,
                 {
-                    //estado: 'CERRADA',
-                    //resuelto_por: 'usuario1',
                     ...payload
                 },
             );
