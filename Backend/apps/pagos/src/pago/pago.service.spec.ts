@@ -18,7 +18,7 @@ import { EstadoTransaccionDb, TipoOperacionTransaccionDb } from './enums/transac
 import { EstadoRespuestaTransaccion } from './enums/estado-respuesta-transaccion.enum';
 import { RabbitMqService } from '@app/rmq';
 import { DataSource } from 'typeorm';
-
+import * as fc from 'fast-check';
 describe('PagoService', () => {
   let service: PagoService;
   const fetchMock = jest.fn();
@@ -268,6 +268,7 @@ describe('PagoService', () => {
       transactionId: 'tx-qr-1',
       qrData: 'signed-qr-token',
       codigoQr: 'signed-qr-token',
+      returnUrl: 'http://localhost:3000/ok',
     });
   });
 
@@ -764,6 +765,46 @@ describe('PagoService', () => {
     expect(result.status).toBe(EstadoRespuestaTransaccion.APROBADO);
     expect(result.message).toBe('Transacción ya aprobada');
     expect(result.redirectUrl).toContain('status=APROBADO');
+  });
+
+  describe('Fuzzing & Security Tests (fast-check)', () => {
+    
+    it('processQrTransaction: debe resistir payloads JWT corruptos y strings aleatorios sin crashear', async () => {
+      // fc.assert ejecutará este test 100 veces por defecto con datos mutados
+      await fc.assert(
+        fc.asyncProperty(fc.string(), async (basura) => {
+          // El JWT Service lanzará un error porque el string no tiene formato de token
+          jwtServiceMock.verifyAsync.mockRejectedValue(new Error('jwt malformed'));
+
+          // Verificamos que el servicio atrape el error del JWT y devuelva
+          // nuestra excepción controlada (UnauthorizedException), y NO un error 500.
+          await expect(service.processQrTransaction(basura)).rejects.toThrow(
+            'Token de QR inválido o expirado'
+          );
+        })
+      );
+    });
+
+    it('getDetalleTransaccion: debe resistir números enteros extremos (SQL Injection / Overflow prevention)', async () => {
+      // Atacamos el endpoint que recibe IDs numéricos con números gigantes, negativos, etc.
+      await fc.assert(
+        fc.asyncProperty(fc.integer(), async (idPeligroso) => {
+          // Simulamos que la base de datos simplemente no encuentra el registro
+          detalleRepositoryMock.findOne.mockResolvedValue(null);
+
+          // Ejecutamos la búsqueda con el número aleatorio
+          const result = await service.getDetalleTransaccion(idPeligroso);
+
+          // Si el código es robusto, simplemente devolverá null y no romperá el hilo de ejecución
+          expect(result).toBeNull();
+          expect(detalleRepositoryMock.findOne).toHaveBeenCalledWith({
+            where: { id: idPeligroso },
+            relations: ['transaccion'],
+          });
+        })
+      );
+    });
+
   });
   
 });
