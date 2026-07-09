@@ -130,6 +130,11 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
     }, [obtenerRoles]);
 
     const logout = useCallback(() => {
+        setLoading(true);
+        setAutenticado(false);
+        setToken(null);
+        setRolUsuario(null);
+        setUsuario(null);
         keycloak.logout({
             redirectUri: `${window.location.origin}/login`,
         });
@@ -147,7 +152,7 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
             console.log("loading:", loading);
             
         }
-    }, [rolUsuario, isAdmin,autenticado,loading]);
+    }, [rolUsuario, isAdmin,autenticado,loading, usuario]);
 
     const valorContexto = useMemo(() => ({
         token,
