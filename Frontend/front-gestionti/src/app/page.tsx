@@ -86,17 +86,27 @@ export default function Home() {
         </div>
       </main>
 
-      <footer className="bg-slate-900 py-12 border-t border-slate-800">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between">
-          <div className="flex items-center gap-2 mb-4 md:mb-0">
-            <CreditCard className="w-5 h-5 text-indigo-500" />
-            <span className="text-lg font-black text-white tracking-tight">PasarelaDePagos<span className="text-indigo-500">.</span></span>
-          </div>
-          <p className="text-slate-500 text-sm font-medium">
-            Proyecto Integrador Gestión TI
-          </p>
-        </div>
-      </footer>
+      <footer className="bg-slate-900 border-t border-slate-800 py-12 mt-16 w-full">
+                <div className="max-w-7xl mx-auto px-6 flex flex-col items-center justify-center text-center">
+                    <h3 className="text-lg font-bold text-white mb-2">¿Necesitas ayuda con la pasarela?</h3>
+                    <p className="text-slate-400 text-sm mb-6">
+                        Ponte en contacto con nuestro equipo de soporte técnico y financiero.
+                    </p>
+                    
+                    <div className="inline-flex items-center gap-3 bg-slate-800/50 border border-slate-700 px-6 py-3 rounded-full">
+                        <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <a 
+                            href="mailto:cuentaparaquehackeen@gmail.com" 
+                            className="text-indigo-400 font-medium hover:text-indigo-300 transition-colors"
+                        >
+                            cuentaparaquehackeen@gmail.com
+                        </a>
+                    </div>
+
+                </div>
+            </footer>
     </div>
   );
 }
