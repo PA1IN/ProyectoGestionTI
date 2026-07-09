@@ -12,7 +12,7 @@ import { REQUIRE_ADMIN_KEY } from './admin.decorator';
 
 @Injectable()
 export class KeycloakAuthGuard implements CanActivate {
-  private readonly keycloakClientId = 'proyecto-4-frontend';
+  private readonly keycloakClientId = 'p4';
 
   constructor(
     private readonly reflector: Reflector,
