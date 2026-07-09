@@ -98,15 +98,15 @@ export default function NuevoTicketPage() {
                         <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider border-b pb-2">Datos del Cliente</h3>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo *</label>
-                            <input required type="text" name="cliente_nombre" value={formData.cliente_nombre} onChange={handleCambio} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="Ej. María González" />
+                            <input required type="text" name="cliente_nombre" value={formData.cliente_nombre} onChange={handleCambio} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 placeholder:text-gray-400" placeholder="Ej. María González" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Correo Electrónico *</label>
-                            <input required type="email" name="cliente_email" value={formData.cliente_email} onChange={handleCambio} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="maria@email.com" />
+                            <input required type="email" name="cliente_email" value={formData.cliente_email} onChange={handleCambio} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 placeholder:text-gray-400" placeholder="maria@email.com" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">ID de Pago / Transacción *</label>
-                            <input required type="text" name="pago_id_ref" value={formData.pago_id_ref} onChange={handleCambio} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="PAGO-55555" />
+                            <input required type="text" name="pago_id_ref" value={formData.pago_id_ref} onChange={handleCambio} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 placeholder:text-gray-400" placeholder="PAGO-55555" />
                         </div>
                     </div>
 
@@ -114,7 +114,7 @@ export default function NuevoTicketPage() {
                         <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider border-b pb-2">Detalle del Problema</h3>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Prioridad *</label>
-                            <select required name="prioridad" value={formData.prioridad} onChange={handleCambio} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
+                            <select required name="prioridad" value={formData.prioridad} onChange={handleCambio} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 placeholder:text-gray-400">
                                 <option value="baja">Baja</option>
                                 <option value="media">Media</option>
                                 <option value="alta">Alta</option>
@@ -123,11 +123,11 @@ export default function NuevoTicketPage() {
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Asunto *</label>
-                            <input required type="text" name="asunto" value={formData.asunto} onChange={handleCambio} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all" placeholder="Ej. Cargo duplicado" />
+                            <input required type="text" name="asunto" value={formData.asunto} onChange={handleCambio} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 placeholder:text-gray-400" placeholder="Ej. Cargo duplicado" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                            <textarea name="descripcion" value={formData.descripcion} onChange={handleCambio} rows={4} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all resize-none" placeholder="Detalla el problema aquí..." />
+                            <textarea name="descripcion" value={formData.descripcion} onChange={handleCambio} rows={4} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all resize-none text-gray-900 placeholder:text-gray-400" placeholder="Detalla el problema aquí..." />
                         </div>
                     </div>
                 </div>

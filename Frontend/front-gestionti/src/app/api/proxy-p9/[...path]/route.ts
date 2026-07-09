@@ -45,7 +45,7 @@ async function reenviarPeticion(req: NextRequest, contexto: { params: Promise<{ 
 
         console.log("URL a la que se reenvía la petición:", url);
         console.log("Método de la petición:", req.method);
-
+        
         let data = null;
         if (req.method !== 'GET' && req.method !== 'HEAD') {
             try {
@@ -58,7 +58,6 @@ async function reenviarPeticion(req: NextRequest, contexto: { params: Promise<{ 
         const respuesta = await axios({
             method: req.method,
             url: url,
-            data: data,
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
                 'Content-Type': 'application/json',

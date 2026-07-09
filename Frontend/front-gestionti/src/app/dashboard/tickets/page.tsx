@@ -27,9 +27,12 @@ export default function TicketsDashboardPage() {
             if (data.ok)
             {
                 setTicket(data.ticket);
+            } else {
+                setError(data.message || 'Ticket no encontrado.');
             }
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Ticket no encontrado o error de conexión.');
+            const error = err.response?.data?.message || err.response?.data?.error;
+            setError(error || 'Ticket no encontrado o error de conexión.');
         }
     };
 
@@ -59,7 +62,7 @@ export default function TicketsDashboardPage() {
                             value={busquedaId}
                             onChange={(e) => setBusquedaId(e.target.value)}
                             placeholder="Ingresa el ID del ticket (ej. a1b2c3d4-...)" 
-                            className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                            className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 placeholder:text-gray-400"
                         />
                     </div>
                 </div>
