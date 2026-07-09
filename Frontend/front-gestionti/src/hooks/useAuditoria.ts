@@ -43,8 +43,19 @@ export function useResolverAlerta() {
                 throw error;
             }
         },
-        onSuccess: () => {
-            clienteQuery.invalidateQueries({ queryKey: ['alertas']});
+        onSuccess: async (alertaActualizada) => {
+            clienteQuery.setQueriesData(
+                { queryKey: ['alertas'] }, 
+                (datosAntiguos: Alerta[] | undefined) => {
+                    if (!datosAntiguos) return datosAntiguos;
+                    
+                    return datosAntiguos.map(alerta => 
+                        alerta.id === alertaActualizada.id ? alertaActualizada : alerta
+                    );
+                }
+            );
+
+            return await clienteQuery.invalidateQueries({ queryKey: ['alertas'] });
         }
     });
 }
