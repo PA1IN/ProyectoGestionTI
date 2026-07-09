@@ -58,7 +58,7 @@ export class DiscrepanciaConciliacion {
   })
   estado!: EstadoDiscrepancia;
 
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   resuelto_por!: string | null;
 
   @CreateDateColumn()

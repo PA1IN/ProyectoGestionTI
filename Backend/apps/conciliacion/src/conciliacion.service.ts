@@ -13,8 +13,6 @@ import {
   WebhookJob,
 } from '@app/rmq';
 
-const USUARIO_SISTEMA_UUID = '00000000-0000-0000-0000-000000000000'; //cabmiar a una validacion con el auth del grupo 12
-
 export interface DiscrepanciaResumen {
   id: number;
   rrn: number | null;
@@ -75,7 +73,7 @@ export class ConciliacionService {
 
   async closeDiscrepancyByRrn(
     rrn: number,
-    resueltoPor = USUARIO_SISTEMA_UUID,
+    resueltoPor: string | null,
   ): Promise<DiscrepanciaConciliacion | null> {
     const resultado = await this.discrepanciaRepository
       .createQueryBuilder()

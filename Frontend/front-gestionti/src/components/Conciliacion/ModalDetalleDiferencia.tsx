@@ -2,6 +2,7 @@ import React from 'react';
 import { X, AlertTriangle, ArrowRight, ShieldAlert, CheckCircle2, Building2, Server, Loader2, BanknoteArrowUp, Building2Icon } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { DetalleDiscrepancia, useCerrarDiscrepancia, useDiscrepanciaPorRrn } from '@/hooks/useConciliacion';
+import { useAuth } from '@/context/AuthContext';
 
 interface ModalProps { 
     abierto: boolean;
@@ -12,10 +13,9 @@ interface ModalProps {
 
 export const ModalDetalleDiferencia = ({ abierto, cerrado, rrn, onDiscrepanciaCerrada }: ModalProps) => {
     const queryClient = useQueryClient();
+    const { usuario } = useAuth();
     const { data: detalle, isLoading } = useDiscrepanciaPorRrn(abierto ? rrn : null);
     const cerrarDiscrepancia = useCerrarDiscrepancia();
-
-    const USUARIO_SISTEMA_UUID = '00000000-0000-0000-0000-000000000000';
 
     if (!abierto) return null;
 
@@ -52,7 +52,7 @@ export const ModalDetalleDiferencia = ({ abierto, cerrado, rrn, onDiscrepanciaCe
             rrn,
             payload: {
                 estado: 'CERRADA',
-                resuelto_por: USUARIO_SISTEMA_UUID,
+                resuelto_por: usuario ?? 'a',
             },
         });
 

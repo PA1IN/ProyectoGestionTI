@@ -13,6 +13,7 @@ interface TipoAutenticacion {
     isAdmin: boolean;
     loading: boolean;
     autenticado: boolean;
+    usuario: string | null;
     iniciarSesion: () => Promise<void>;
     logout: () => void;
 }
@@ -26,6 +27,7 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
     const [rolUsuario, setRolUsuario] = useState<AdminRole | null>(null);
     const [loading, setLoading] = useState(true);
     const [autenticado, setAutenticado] = useState(false);
+    const [usuario, setUsuario] = useState<string | null>(null);
 
     const ruta = usePathname();
 
@@ -37,12 +39,14 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
     const sincronizarEstado = useCallback(() => {
         const tokenActual = keycloak.token ?? null;
         const roles = obtenerRoles();
+        const username = keycloak.tokenParsed?.preferred_username ?? null;
         console.log("Roles obtenidos desde Keycloak:", roles);
         const tieneRolAdmin = roles.includes('admin');
         console.log("admin: ", tieneRolAdmin);
         setToken(tokenActual);
         setAutenticado(Boolean(keycloak.authenticated));
         setRolUsuario(tieneRolAdmin ? 'admin' : null);
+        setUsuario(username);
     }, [obtenerRoles]);
 
     const sincronizarDesdeBackend = useCallback(async () => {
@@ -53,9 +57,12 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
             console.log("respuesta dek backend:", respuesta.data);
             const tieneRolAdmin = rolesBackend.includes('admin');
 
+            const username = respuesta.data?.username ?? respuesta.data?.name ?? null;
+
             setToken(keycloak.token ?? null);
             setAutenticado(true);
             setRolUsuario(tieneRolAdmin ? 'admin' : null);
+            setUsuario(username);
         } catch {
             sincronizarEstado();
         }
@@ -136,6 +143,7 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
             console.log("rolUsuario:", rolUsuario);
             console.log("isAdmin:", isAdmin);
             console.log("autenticado:", autenticado);
+            console.log("usuario:", usuario);
             console.log("loading:", loading);
             
         }
@@ -147,9 +155,10 @@ export const ProveedorAuth = ({ children }: { children: React.ReactNode }) => {
         isAdmin,
         loading,
         autenticado,
+        usuario,
         iniciarSesion,
         logout
-    }), [token, rolUsuario, isAdmin, loading, autenticado, iniciarSesion, logout]);
+    }), [token, rolUsuario, isAdmin, loading, autenticado, usuario, iniciarSesion, logout]);
 
     return (
         <contextoAutenticacion.Provider value={valorContexto}>

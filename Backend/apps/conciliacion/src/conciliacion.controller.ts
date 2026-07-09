@@ -2,10 +2,8 @@ import { Body, BadRequestException, Controller, Get, NotFoundException, Param, P
 import type { Response } from 'express';
 import { ConciliacionService } from './conciliacion.service';
 
-const USUARIO_SISTEMA_UUID = '00000000-0000-0000-0000-000000000000';
-
 interface PatchDiscrepanciaBody {
-  resuelto_por?: string;
+  resuelto_por: string;
 }
 
 @Controller('conciliacion/discrepancias')
@@ -30,7 +28,7 @@ export class ConciliacionController {
   ) {
     const discrepancia = await this.conciliacionService.closeDiscrepancyByRrn(
       rrn,
-      body.resuelto_por ?? USUARIO_SISTEMA_UUID,
+      body.resuelto_por ?? null,
     );
 
     if (!discrepancia) {

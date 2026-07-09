@@ -132,9 +132,10 @@ export function useCerrarDiscrepancia() {
         mutationFn: async ({ rrn, payload }) => {
             const respuesta = await api.patch(
                 `/conciliacion/discrepancias/${rrn}`,
-                payload ?? {
-                    estado: 'CERRADA',
-                    resuelto_por: USUARIO_SISTEMA_UUID,
+                {
+                    //estado: 'CERRADA',
+                    resuelto_por: 'usuario1',
+                    ...payload
                 },
             );
 
