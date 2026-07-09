@@ -38,18 +38,6 @@ export interface ComprobantePago {
     ultimosCuatro:string;
 }
 
-// obtiene los datos cuando el usuario accede a checkout
-/*export function useDetalleTransaccion(token: string) {
-    return useQuery<DetalleTransaccion>({
-        queryKey: ['transaccion', token],
-        queryFn: async () => {
-            const respuesta = await api.get(`/pagos/checkout/${token}`);
-            return respuesta.data;
-        },
-        enabled: !!token, // solo se ejecuta si hay un token valido
-        retry: false, // en caso de error no reintentar la peticion
-    })
-}*/
 
 export function useObtenerComprobante(transactionId:string | null) {
     return useQuery<ComprobantePago>({
@@ -75,20 +63,6 @@ export function useDetalleTransaccion(token: string) {
     })
 }
 
-// realiza el proceso de pago al enviar los datos de la tarjeta
-/*export function useProcesarPago(tokenTransaccion: string) {
-    return useMutation({
-        mutationFn: async (datosTarjeta: DatosPagoTarjeta) => {
-            //se envia los datos de la tarjeta junto con el token de transaccion en los headers para validar la transaccion
-            const respuesta = await api.post('/pagos/procesar', datosTarjeta, {
-                headers: {
-                    'X-Transaction-Token': tokenTransaccion
-                }
-            });
-            return respuesta.data;
-        }
-    })
-}*/
 
 export function useProcesarPago(tokenTransaccion: string) {
     return useMutation({

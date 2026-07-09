@@ -22,7 +22,6 @@ export default function Home() {
         returnUrl: `${window.location.origin}/`,
       });
 
-      //window.location.href = respuesta.data.transactionUrl;
       router.push(respuesta.data.transactionUrl);
       setGenerandoCheckout(false);
     } catch (error) {

@@ -18,7 +18,6 @@ function ExitoComponent() {
     const volveraUrl = () => {
         if(returnUrl)
         {
-            //window.location.href = returnUrl;
             router.push(returnUrl);
         } else {
             router.push('/');

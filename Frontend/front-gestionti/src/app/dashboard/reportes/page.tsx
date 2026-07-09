@@ -18,7 +18,6 @@ export default function ReportesPage (){
 
     const generarpdf = (fechaDocumento: string, kpis: any, metodoPago: any[]) => {
         const documento = new jsPDF();
-        //const fechaActual = new Date().toLocaleString('es-CL');
 
         //creacion del formato del pdf 
         documento.setFontSize(24);
@@ -56,9 +55,8 @@ export default function ReportesPage (){
                 ],
             ],
             theme: 'grid',
-            headStyles: { fillColor: [79,70,229], textColor: [255,255,255], /*fontStyle: 'bold'*/ },
+            headStyles: { fillColor: [79,70,229], textColor: [255,255,255] },
             alternateRowStyles: { fillColor: [248, 250, 252] },
-            //margin: { left: 14, right: 14 },
         });
 
         documento.setFontSize(14);
@@ -76,8 +74,7 @@ export default function ReportesPage (){
                 head: [['Metodo de pago', 'Volumen de transacciones (CLP)']],
                 body: filasMetodos,
                 theme: 'striped',
-                headStyles: { fillColor: [51, 65, 85]/*, textColor: [255, 255, 255], fontStyle: 'bold' */},
-                /*margin: { left: 14, right: 14 }*/
+                headStyles: { fillColor: [51, 65, 85]},
             });
 
             documento.save(`reporte_diario_${fechaDocumento.replace(/\//g, '-')}.pdf`);
