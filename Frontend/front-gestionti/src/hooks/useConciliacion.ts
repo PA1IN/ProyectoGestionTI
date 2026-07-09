@@ -34,6 +34,7 @@ export interface UploadPayload {
     archivoId?: string;
 }
 
+/*
 export interface RegistroHistorial {
     id: string;
     archivo_id: string;
@@ -41,6 +42,22 @@ export interface RegistroHistorial {
     registros_banco: number;
     discrepancias_encontradas: number;
     operador: string;
+}
+*/
+
+export interface DiscrepanciaHistorial {
+    id:number;
+    rrn:number;
+    id_transaccion:string;
+    tipo:string;
+    monto_interno:number;
+    monto_banco:number;
+    fecha_conciliacion: string;
+    archivo_id: string;
+    estado: 'ABIERTA' | 'CERRADA';
+    resuelto_por: string | null;
+    created_at: string;
+    updated_at: string;
 }
 
 export function useSubirArchivoConciliacion() {
@@ -60,16 +77,16 @@ export function useSubirArchivoConciliacion() {
         }
     });
 }
-
+/*
 export function useHistorialConciliaciones() {
     return useQuery<RegistroHistorial[]>({
         queryKey: ['historialConciliaciones'],
         queryFn: async () => {
             // backend real:
-            /*
+            
             const respuesta = await api.get('/conciliacion/historial'); 
             return respuesta.data as RegistroHistorial[];
-            */
+            
             
             return new Promise((resolve) => {
                 setTimeout(() => {
@@ -104,6 +121,19 @@ export function useHistorialConciliaciones() {
         }
     });
 }
+*/
+
+
+export function useHistorialConciliaciones(){
+    return useQuery<DiscrepanciaHistorial[]>({
+        queryKey:['historialConciliaciones'],
+        queryFn: async () => {
+            const respuesta = await api.get('/conciliacion/discrepancias');
+            return respuesta.data;
+        }
+
+    })
+}
 
 export interface CerrarDiscrepanciaPayload {
     estado?: string;
@@ -134,7 +164,7 @@ export function useCerrarDiscrepancia() {
                 `/conciliacion/discrepancias/${rrn}`,
                 {
                     //estado: 'CERRADA',
-                    resuelto_por: 'usuario1',
+                    //resuelto_por: 'usuario1',
                     ...payload
                 },
             );

@@ -52,7 +52,7 @@ export const ModalDetalleDiferencia = ({ abierto, cerrado, rrn, onDiscrepanciaCe
             rrn,
             payload: {
                 estado: 'CERRADA',
-                resuelto_por: usuario ?? 'a',
+                resuelto_por: usuario || 'Sistema',
             },
         });
 
