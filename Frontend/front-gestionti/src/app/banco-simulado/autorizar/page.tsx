@@ -10,7 +10,7 @@ export default function AppBancariaSimulada({ searchParams }: { searchParams: Pr
     const qrData = parametros.qrData;
 
     const { data: transaccion, isLoading: cargaTransaccion, isError: errorTransaccion } = useDetalleTransaccion(token);
-    const procesarPagoQr = useProcesarPagoQr(token);
+    const procesarPagoQr = useProcesarPagoQr(qrData);
 
     const [estadoFinal, setEstadoFinal] = useState<'aprobada' | 'rechazada' | null>(null);
 
