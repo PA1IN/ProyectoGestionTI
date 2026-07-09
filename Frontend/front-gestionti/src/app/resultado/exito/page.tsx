@@ -43,7 +43,10 @@ function ExitoComponent() {
         doc.setFontSize(12);
         doc.setFont("helvetica", "normal");
 
-        const fechaFormateada = new Date(comprobante.fechaHora).toLocaleString('es-CL');
+        const fechaFormateada = new Date(comprobante.fechaHora).toLocaleString('es-CL', {
+            timeZone: 'America/Santiago'
+        });
+        
         console.log(fechaFormateada);
         console.log(comprobante.fechaHora);
 

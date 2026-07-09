@@ -10,7 +10,8 @@ import {
     BarChart3,
     LogOut,
     ShieldAlert,
-    Settings
+    Settings,
+    Ticket
 } from 'lucide-react';
 
 export const Menulateral = () => {
@@ -26,10 +27,11 @@ export const Menulateral = () => {
     //menu de nav
     const menuItems = [
         { nombre: 'Resumen', ruta: '/dashboard', icono: LayoutDashboard},
-        { nombre: 'Conciliación', ruta: '/dashboard/conciliacion', icono: FileSpreadsheet},
+        { nombre: 'Conciliaci贸n', ruta: '/dashboard/conciliacion', icono: FileSpreadsheet},
         { nombre: 'Alertas', ruta: '/dashboard/alertas', icono: BellRing},
         { nombre: 'Reportes', ruta: '/dashboard/reportes', icono: BarChart3},
-        { nombre: 'Configuración', ruta: '/dashboard/configuracion', icono: Settings },
+        { nombre: 'Soporte', ruta: '/dashboard/tickets', icono: Ticket},
+        { nombre: 'Configuraci贸n', ruta: '/dashboard/configuracion', icono: Settings },
     ].filter(Boolean);
 
     if (!isAdmin) {
@@ -42,7 +44,7 @@ export const Menulateral = () => {
                 <ShieldAlert className="w-8 h-8 text-indigo-400"/>
                 <div>
                     <h1 className="font-bold text-lg leading-tight">Dashboard Admin</h1>
-                    <p className="text-[10px] text-slate-400 font-mono uppercase tracking-widest">Gestión TI</p>
+                    <p className="text-[10px] text-slate-400 font-mono uppercase tracking-widest">Gesti贸n TI</p>
                 </div>
             </div>
 
@@ -73,7 +75,7 @@ export const Menulateral = () => {
                     className="flex items-center gap-3 px-4 py-3 w-full text-left text-slate-300 hover:bg-slate-800 hover:text-red-400 rounded-xl transition-all"
                 >
                     <LogOut className="w-5 h-5"/>
-                    <span className="font-medium text-sm">Cerrar sesión</span>
+                    <span className="font-medium text-sm">Cerrar sesi贸n</span>
                 </button>
             </div>
         </aside>
