@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { apiProy7 } from "../api/axiosProy9";
+import { apiProy7 } from "../api/axiosProy7";
 
 export interface TicketPayload{
     asunto: string;
