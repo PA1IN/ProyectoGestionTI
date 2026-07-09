@@ -38,10 +38,10 @@ export default function DashboardResumenPage(){
                     <div>
                         <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">Volumen Diario de Transacciones</p>
                         <h3 className="text-2xl font-bold text-gray-900">${metricas.kpiResumen.volumenTransDiario.toLocaleString('es-CL')}
-                            <span className="text-sm text-gray-400 font-medium"> trans</span>
+                            <span className="text-sm text-gray-400 font-medium"> Transacciones</span>
                         </h3>
                         <p className="text-xs text-emerald-600 font-bold mt-1">
-                            {metricas.kpiResumen.crecimientoVolumen}% de variación respecto al día anterior
+                            {metricas.kpiResumen.crecimientoVolumen}% de variación respecto a la semana anterior
                         </p>
                     </div>
                 </div>
@@ -54,7 +54,7 @@ export default function DashboardResumenPage(){
 
                     <div>
                         <p className="text-sm font-bold text-gray-500 uppercase tracking-wider"> Tasa de Rechazo</p>
-                        <h3 className="text-2xl font-bold text-gray-900">{metricas.kpiResumen.tasaRechazo}%</h3>
+                        <h3 className="text-2xl font-bold text-gray-900">{metricas.kpiResumen.tasaRechazo.toPrecision(3)}%</h3>
                         <p className="text-xs text-emerald-600 font-bold mt-1"> optimo (objetivo &lt;0.5%)</p>
                     </div>
                 </div>

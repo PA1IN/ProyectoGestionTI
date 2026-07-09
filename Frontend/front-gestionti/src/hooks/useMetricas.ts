@@ -31,11 +31,12 @@ export function useObtenerMetricas() {
     return useQuery<DashboardMetricas>({
         queryKey: ['dashboardMetricas'],
         queryFn: async () => {
+            
             const respuesta = await apiProy9.get('/analitica/dashboard');
             console.log("respuesta metricas", respuesta.data);
             return respuesta.data;
             
-           /*
+            /*
             return new Promise((resolve) => {
                 setTimeout(() => {
                     resolve({
@@ -58,6 +59,7 @@ export function useObtenerMetricas() {
                 },800);
              });
             */
+            
         },
         enabled: autenticado,
         refetchInterval: 15000, 

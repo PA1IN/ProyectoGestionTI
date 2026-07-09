@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import {
     LayoutDashboard,
@@ -16,22 +16,22 @@ import {
 
 export const Menulateral = () => {
     const pathname = usePathname();
-    const router = useRouter();
+    //const router = useRouter();
     const { logout, isAdmin } = useAuth();
 
     const handleLogout = () => {
         logout();
-        router.push('/login');
+        //router.push('/login');
     };
 
     //menu de nav
     const menuItems = [
         { nombre: 'Resumen', ruta: '/dashboard', icono: LayoutDashboard},
-        { nombre: 'Conciliaci贸n', ruta: '/dashboard/conciliacion', icono: FileSpreadsheet},
+        { nombre: 'Conciliación', ruta: '/dashboard/conciliacion', icono: FileSpreadsheet},
         { nombre: 'Alertas', ruta: '/dashboard/alertas', icono: BellRing},
         { nombre: 'Reportes', ruta: '/dashboard/reportes', icono: BarChart3},
         { nombre: 'Soporte', ruta: '/dashboard/tickets', icono: Ticket},
-        { nombre: 'Configuraci贸n', ruta: '/dashboard/configuracion', icono: Settings },
+        { nombre: 'Configuración', ruta: '/dashboard/configuracion', icono: Settings },
     ].filter(Boolean);
 
     if (!isAdmin) {
@@ -44,7 +44,7 @@ export const Menulateral = () => {
                 <ShieldAlert className="w-8 h-8 text-indigo-400"/>
                 <div>
                     <h1 className="font-bold text-lg leading-tight">Dashboard Admin</h1>
-                    <p className="text-[10px] text-slate-400 font-mono uppercase tracking-widest">Gesti贸n TI</p>
+                    <p className="text-[10px] text-slate-400 font-mono uppercase tracking-widest">Gestión TI</p>
                 </div>
             </div>
 
@@ -75,7 +75,7 @@ export const Menulateral = () => {
                     className="flex items-center gap-3 px-4 py-3 w-full text-left text-slate-300 hover:bg-slate-800 hover:text-red-400 rounded-xl transition-all"
                 >
                     <LogOut className="w-5 h-5"/>
-                    <span className="font-medium text-sm">Cerrar sesi贸n</span>
+                    <span className="font-medium text-sm">Cerrar sesión</span>
                 </button>
             </div>
         </aside>

@@ -6,9 +6,10 @@ import { UploadCloud, FileText, Loader2, CheckCircle2, AlertCircle, X } from 'lu
 
 interface DropProps {
     onArchivoProcesado: (datos: any) => void;
+    onLimpiar?:() => void;
 }
 
-export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
+export const DropArchivos = ({ onArchivoProcesado, onLimpiar }: DropProps) => {
     //estados 
     const [arrastrando, setArrastrando] = useState(false);
     const [archivo, setArchivo] = useState<File | null>(null);
@@ -65,10 +66,11 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
             const resultados = await subirArchivo.mutateAsync({ archivo });
             setEstado('exito');
             onArchivoProcesado(resultados);
-        } catch(err) {
+        } catch(err: any) {
             console.error("error al procesar el archivo:", err);
             setEstado('error');
-            setMensajeError('hubo un problema de red al comunicarse con el servidor')
+            const error = err.response?.data?.message || 'Hubo un problema de red al comunicarse con el servidor';
+            setMensajeError(error); 
         }
     };
 
@@ -76,6 +78,7 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
         setArchivo(null);
         setEstado('esperando');
         if(inputRef.current) inputRef.current.value = '';
+        if(onLimpiar) onLimpiar();
     };
 
     return(
@@ -113,7 +116,7 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
                                 <FileText className="w-8 h-8 text-indigo-500 flex-shrink-0"/>
                                 <div className="text-left flex-1 overflow-hidden">
                                     <p className="text-sm font-bold text-gray-900 truncate">{archivo.name}</p>
-                                    <p>{(archivo.size / 1024).toFixed(1)} Kb</p>
+                                    <p className="text-gray-900 placeholder:text-gray-400">{(archivo.size / 1024).toFixed(1)} Kb</p>
                                 </div>
                                 {estado !== 'subiendo' && (
                                     <button onClick={(e) => { e.stopPropagation(); resetear(); }} className="p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-red-500 transition-colors">
@@ -145,7 +148,14 @@ export const DropArchivos = ({ onArchivoProcesado }: DropProps) => {
             )}
 
             {estado === 'exito' && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 flex flex-col items-center text-center animate-in zoom-in duration-300">
+                <div className="relative bg-emerald-50 border border-emerald-200 rounded-2xl p-8 flex flex-col items-center text-center animate-in zoom-in duration-300">
+                    <button
+                        onClick={resetear}
+                        title="Cerrar archivo y limpiar tabla"
+                        className="absolute top-4 right-4 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full shadow-md transition-transform hover:scale-110"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
                     <CheckCircle2 className="w-16 h-16 text-emerald-500 mb-4"/>
                     <h3 className="text-lg font-bold text-emerald-900">Archivo Procesado con exito</h3>
                     <p className="text-sm text-emerald-700 mt-2 max-w-md">
